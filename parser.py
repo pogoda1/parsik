@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import webbrowser
 import threading
+import time
 
 app = Flask(__name__)
 
@@ -51,10 +52,28 @@ HTML_RESULT = """
     margin: 20px 0;
     color: #666;
   }
+  .processing-time {
+    color: #666;
+    font-size: 0.9em;
+    margin-top: 5px;
+  }
+  .stats {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+  }
 </style>
   </head>
   <body>
     <h1>Парсинг мероприятий</h1>
+    <div class="stats">
+      <div>Обработано: <span id="processed-count">0</span>/<span id="total-count">0</span></div>
+      <div>Среднее время: <span id="avg-time">0</span>с</div>
+    </div>
     <div id="results-container"></div>
     <div id="loading" class="loading">Обработка следующего события...</div>
     
@@ -66,6 +85,16 @@ HTML_RESULT = """
     <script>
     let currentIndex = 0;
     const events = {{ events|tojson|safe }};
+    let totalProcessingTime = 0;
+    
+    document.getElementById('total-count').textContent = events.length;
+    
+    function updateStats(processingTime) {
+        totalProcessingTime += processingTime;
+        const avgTime = (totalProcessingTime / (currentIndex + 1)).toFixed(2);
+        document.getElementById('processed-count').textContent = currentIndex + 1;
+        document.getElementById('avg-time').textContent = avgTime;
+    }
     
     function addResultBlock(result) {
         const container = document.getElementById('results-container');
@@ -77,6 +106,7 @@ HTML_RESULT = """
             <textarea readonly>${result.original}</textarea>
             <p><b>Результат парсинга:</b></p>
             <pre>${result.parsed || result.error}</pre>
+            <div class="processing-time">Время обработки: ${result.processing_time.toFixed(2)}с</div>
         `;
         container.appendChild(block);
     }
@@ -88,6 +118,7 @@ HTML_RESULT = """
         }
 
         document.getElementById('loading').style.display = 'block';
+        const startTime = Date.now();
         
         fetch('/process_event', {
             method: 'POST',
@@ -101,16 +132,22 @@ HTML_RESULT = """
         })
         .then(response => response.json())
         .then(result => {
+            const processingTime = (Date.now() - startTime) / 1000;
+            result.processing_time = processingTime;
             addResultBlock(result);
+            updateStats(processingTime);
             currentIndex++;
             processNextEvent();
         })
         .catch(error => {
             console.error('Error:', error);
+            const processingTime = (Date.now() - startTime) / 1000;
             addResultBlock({
                 original: events[currentIndex].text,
-                error: 'Ошибка обработки: ' + error
+                error: 'Ошибка обработки: ' + error,
+                processing_time: processingTime
             });
+            updateStats(processingTime);
             currentIndex++;
             processNextEvent();
         });
@@ -119,7 +156,8 @@ HTML_RESULT = """
     function copyToClipboard() {
         const results = Array.from(document.querySelectorAll('.event-block')).map(block => ({
             original: block.querySelector('textarea').value,
-            parsed: block.querySelector('pre').textContent
+            parsed: block.querySelector('pre').textContent,
+            processing_time: parseFloat(block.querySelector('.processing-time').textContent.match(/[\d.]+/)[0])
         }));
         const jsonText = JSON.stringify(results, null, 2);
         navigator.clipboard.writeText(jsonText).then(() => {
