@@ -11,6 +11,7 @@ MAIN_TEMPLATE = """
   .error { color: red; }
   .processing { color: #666; }
   .success { color: green; }
+  .correction { color: #ff8c00; }
   .event-container { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
   .timestamp { color: #666; font-size: 0.9em; }
 </style>
@@ -35,11 +36,21 @@ MAIN_TEMPLATE = """
     const statusDiv = eventContainer.querySelector('.status');
     const timestamp = new Date().toLocaleTimeString();
     
-    statusDiv.innerHTML = `
+    let statusHtml = `
       <span class="timestamp">[${timestamp}]</span>
       <span class="${status.toLowerCase()}">${status}</span>
       ${result ? `<br>Время обработки: ${formatTime(result.processing_time)}` : ''}
     `;
+
+    if (result && result.corrections) {
+      statusHtml += '<br><span class="correction">Исправления:</span><ul>';
+      result.corrections.forEach(msg => {
+        statusHtml += `<li class="correction">${msg}</li>`;
+      });
+      statusHtml += '</ul>';
+    }
+
+    statusDiv.innerHTML = statusHtml;
 
     if (result) {
       const resultDiv = eventContainer.querySelector('.result');

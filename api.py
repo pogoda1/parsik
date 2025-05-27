@@ -15,21 +15,37 @@ def check_for_errors(parsed_json):
         return parsed_json["errorText"]
     return None
 
-def validate_parsed_data(parsed_json):
-    """Проверяет все поля в распарсенных данных"""
+def validate_parsed_data(parsed_json_with_data):
+    parsed_json = parsed_json_with_data["data"]
+    print("parsed_json",parsed_json)
+
+    """Проверяет все поля в распарсенных данных и пытается исправить недопустимые значения"""
     if not isinstance(parsed_json, dict):
-        return "Результат должен быть объектом"
+        return "Результат должен быть объектом", None
     
-    required_fields = ['department', 'operation', 'crop']
+    required_fields = ['eventCategories', 'eventThemes', 'eventAgeLimit']
+    corrections = {}
+    messages = []
+    
     for field in required_fields:
         if field not in parsed_json:
-            return f"Отсутствует обязательное поле: {field}"
+            return f"Отсутствует обязательное поле: {field}", None
         
-        is_valid, error_msg = validate_field(field, parsed_json[field])
+        is_valid, message, corrected = validate_field(field, parsed_json[field])
         if not is_valid:
-            return error_msg
+            if corrected:
+                corrections[field] = corrected
+                messages.append(message)
+            else:
+                return message, None
     
-    return None
+    if corrections:
+        # Применяем исправления
+        for field, value in corrections.items():
+            parsed_json[field] = value
+        return None, messages
+    
+    return None, None
 
 def call_model_api(text):
     start_time = time.time()
@@ -56,12 +72,16 @@ def call_model_api(text):
         if err_text:
             return {"error": err_text, "processing_time": time.time() - start_time}
         
-        # Проверяем валидность значений полей
-        validation_error = validate_parsed_data(parsed_json)
-        if validation_error:
-            return {"error": validation_error, "processing_time": time.time() - start_time}
+        # # Проверяем валидность значений полей и пытаемся исправить
+        # validation_error, correction_messages = validate_parsed_data(parsed_json)
+        # if validation_error:
+        #     return {"error": validation_error, "processing_time": time.time() - start_time}
         
-        return {"result": parsed_json, "processing_time": time.time() - start_time}
+        result = {"result": parsed_json, "processing_time": time.time() - start_time}
+        # if correction_messages:
+        #     result["corrections"] = correction_messages
+        
+        return result
     except requests.exceptions.Timeout:
         return {"error": "Превышено время ожидания ответа от модели (60 секунд). Попробуйте еще раз.", "processing_time": time.time() - start_time}
     except requests.exceptions.ConnectionError:
