@@ -6,9 +6,18 @@ from utils import validate_field
 
 API_URL = "http://localhost:1234/v1/chat/completions"
 PROMPT_FILE = os.path.expanduser("prompt.md")
+FEW_SHOT_FILE = os.path.expanduser("few_shot.md")
+JSON_SCHEME_FILE = os.path.expanduser("json_scheme.md")
+SCHEME_HINTS_FILE = os.path.expanduser("schema_hints.md")
 
 with open(PROMPT_FILE, "r", encoding="utf-8") as f:
     PROMPT = f.read()
+with open(FEW_SHOT_FILE, "r", encoding="utf-8") as f:
+    FEW_SHOT = f.read()
+with open(JSON_SCHEME_FILE, "r", encoding="utf-8") as f:
+    JSON_SCHEME = f.read()
+with open(SCHEME_HINTS_FILE, "r", encoding="utf-8") as f:
+    SCHEME_HINTS = f.read()
 
 def check_for_errors(parsed_json):
     if isinstance(parsed_json, dict) and "errorCode" in parsed_json:
@@ -47,9 +56,34 @@ def validate_parsed_data(parsed_json_with_data):
     
     return None, None
 
+def replace_variables(text, variables):
+    """
+    Заменяет переменные в тексте на реальные данные
+    
+    Args:
+        text (str): Текст с переменными в формате {{ variable_name }}
+        variables (dict): Словарь с переменными и их значениями
+        
+    Returns:
+        str: Текст с замененными переменными
+    """
+    for var_name, var_value in variables.items():
+        text = text.replace(f"{{{{ {var_name} }}}}", str(var_value))
+    return text
+
 def call_model_api(text):
     start_time = time.time()
-    full_prompt = f"{PROMPT}\n\n{text}"
+    
+    # Создаем словарь с переменными
+    variables = {
+        "json_schema": JSON_SCHEME,
+        "schema_hints": SCHEME_HINTS,
+        "few_shot_examples": FEW_SHOT,
+        "message": text
+    }
+    
+    full_prompt = replace_variables(PROMPT, variables)
+    
     headers = {"Content-Type": "application/json"}
     request_data = {
         "model": "gemma-3-4b-it-qat",
@@ -57,12 +91,14 @@ def call_model_api(text):
             {"role": "system", "content": "You are an assistant that extracts structured JSON from unstructured text."},
             {"role": "user", "content": full_prompt}
         ],
-        "temperature": 0.0
+        "temperature": 0.7
     }
+    # print("request_data",request_data)
     try:
         response = requests.post(API_URL, json=request_data, headers=headers, timeout=60)
         response.raise_for_status()
         res_json = response.json()
+        # print("res_json",res_json)
         content = res_json["choices"][0]["message"]["content"]
         content = content.replace("```json", "").replace("```", "").strip()
         parsed_json = json.loads(content)
