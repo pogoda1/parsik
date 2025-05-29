@@ -2,7 +2,7 @@ import json
 import os
 from difflib import get_close_matches
 
-TEST_JSON_PATH = "test.json"
+TEST_JSON_PATH = "SwaggerUIresponse_1.json"
 # Новые наборы значений
 EVENT_CATEGORIES = tuple(['Концерт', 'Выставка', 'Спектакль', 'Фестиваль', 'Мастер-класс', 
                          'Лекция', 'Кино', 'Турнир', 'Конкурс', 'Праздник'])

@@ -69,7 +69,7 @@ MAIN_TEMPLATE = """
     container.innerHTML = `
       <h2>Событие ID: ${event.id}</h2>
       <p><strong>Описание:</strong><br>${event.description || 'Нет описания'}</p>
-      <p><strong>Исходный текст:</strong><br>${event.text.replace(/\\n/g,'<br>')}</p>
+      <p><strong>Исходный текст:</strong><br>${event.input.replace(/\\n/g,'<br>')}</p>
       <div class="status"></div>
       <div class="result"></div>
     `;
