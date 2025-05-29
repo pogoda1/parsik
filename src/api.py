@@ -148,6 +148,7 @@ class ModelAPI:
         response.raise_for_status()
         
         res_json = response.json()
+        print(res_json)
         self._validate_response(res_json)
         
         return res_json

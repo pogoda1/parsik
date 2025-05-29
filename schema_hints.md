@@ -1,5 +1,3 @@
-Для реализации few-shot подхода к валидации данных о событиях на основе предоставленных правил, я доработаю правила валидации и добавлю примеры (few-shot examples), чтобы модель могла лучше понять, как обрабатывать входные данные. Few-shot подход предполагает предоставление нескольких примеров входных данных и ожидаемых результатов, чтобы модель могла обобщить логику обработки.
-
 ### Обновленные критические правила валидации:
 1. **Дата обязательна**:
    - Если в тексте не найдена ни одна дата -> `errorCode: 2` (DATE_NOT_FOUND).
@@ -18,32 +16,72 @@
 
 3. **eventCategories**:
    - Поле обязательно, должно быть массивом строк.
-   - Значения должны строго соответствовать ключам (`keyData`) из таблицы категорий:
+   - Значения должны строго соответствовать категориям из списка:
+   - Не брать из списка **eventThemes**
      ```json
      [
-       "excursion", "exhibitions", "well", "lecture", "seminar", "conference", "presentation", 
-       "webinar", "training", "master_class", "vorkshop", "business_game", "class", "forum", 
-       "mitap", "business_breakfast", "meeting", "networking", "mastermind", "theater", 
-       "movie", "stand__up", "concerts", "party", "circus", "festivals", "show", "games", 
-       "active_rest", "olympics", "battle", "championship", "league", "competition", 
-       "volunteering", "charity", "social_initiatives"
+       "excursion",
+       "exhibitions",
+       "well",
+       "lecture",
+       "seminar",
+       "conference",
+       "presentation",
+       "webinar",
+       "training",
+       "master_class",
+       "vorkshop",
+       "business_game",
+       "class",
+       "forum",
+       "mitap",
+       "business_breakfast",
+       "meeting",
+       "networking",
+       "mastermind",
+       "theater",
+       "movie",
+       "stand__up",
+       "concerts",
+       "party",
+       "circus",
+       "festivals",
+       "show",
+       "games",
+       "active_rest",
+       "olympics",
+       "battle",
+       "championship",
+       "league",
+       "competition",
+       "volunteering",
+       "charity",
+       "social_initiatives",
      ]
      ```
-   - Если категория не соответствует `keyData` или отсутствует -> `errorCode: 3` (INVALID_CATEGORY).
    - Если категория не указана явно, но может быть выведена из контекста (например, "йога" -> `class`), использовать ближайшее соответствие.
 
 4. **eventThemes**:
    - Поле обязательно, должно быть массивом строк.
-   - Значения должны строго соответствовать ключам (`keyData`) из таблицы тематик:
+   - Значения должны строго соответствовать тематикам из списка:
+   - Не брать из списка **eventCategories**
      ```json
      [
-       "culture_and_art", "science_and_education", "industry_specialized", "it_and_the_internet", 
-       "business_and_entrepreneurship", "visual_creativity_visual_graphics", 
-       "psychology_and_self__knowledge", "humor", "music", "travel_and_tourism", 
-       "cooking_and_gastronomy", "beauty_and_health", "sport"
+       "culture_and_art",
+       "science_and_education",
+       "industry_specialized",
+       "it_and_the_internet",
+       "business_and_entrepreneurship",
+       "visual_creativity_visual_graphics",
+       "psychology_and_self__knowledge",
+       "humor",
+       "music",
+       "travel_and_tourism",
+       "cooking_and_gastronomy",
+       "beauty_and_health",
+       "sport"
      ]
      ```
-   - Если тематика не соответствует `keyData` или отсутствует -> `errorCode: 4` (INVALID_THEME).
    - Если тематика не указана явно, но может быть выведена из контекста (например, "йога" -> `beauty_and_health`), использовать ближайшее соответствие.
 5. **linkSource**:
     - Должна быть ссылкой, если ссылки нет, пустая строка

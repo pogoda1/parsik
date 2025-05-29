@@ -7,8 +7,8 @@
       "to": ""
     }],
     "eventPrice": [ 0 ],
-    "eventCategories": ["charity"],
-    "eventThemes": ["science_and_education"],
+    "eventCategories": [],
+    "eventThemes": [],
     "eventAgeLimit": "12",
     "eventLocation": {
       "name": "",

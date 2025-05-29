@@ -1,6 +1,85 @@
 
 ### Few-Shot примеры:
 Ниже приведены примеры входных данных и ожидаемых результатов, чтобы модель могла лучше понять логику валидации.
+❗Важно:
+
+eventCategories и eventThemes должны содержать только значения из допустимых списков ниже.
+
+Если распознанное значение не входит в список — оно не включается в итоговый JSON.
+
+Если не удалось извлечь валидную категорию — выдать ошибку:
+
+{
+  "errorCode": 3,
+  "errorText": "INVALID_CATEGORY"
+}
+
+
+Если категорию удалось определить, но тематика невалидна или отсутствует — выдать ошибку:
+
+{
+  "errorCode": 4,
+  "errorText": "INVALID_THEME"
+}
+Ошибка INVALID_CATEGORY имеет приоритет над INVALID_THEME.
+
+ Допустимые eventCategories:
+  [
+       "excursion",
+       "exhibitions",
+       "well",
+       "lecture",
+       "seminar",
+       "conference",
+       "presentation",
+       "webinar",
+       "training",
+       "master_class",
+       "vorkshop",
+       "business_game",
+       "class",
+       "forum",
+       "mitap",
+       "business_breakfast",
+       "meeting",
+       "networking",
+       "mastermind",
+       "theater",
+       "movie",
+       "stand__up",
+       "concerts",
+       "party",
+       "circus",
+       "festivals",
+       "show",
+       "games",
+       "active_rest",
+       "olympics",
+       "battle",
+       "championship",
+       "league",
+       "competition",
+       "volunteering",
+       "charity",
+       "social_initiatives",
+     ]
+
+Допустимые eventThemes:
+  [
+       "culture_and_art",
+       "science_and_education",
+       "industry_specialized",
+       "it_and_the_internet",
+       "business_and_entrepreneurship",
+       "visual_creativity_visual_graphics",
+       "psychology_and_self__knowledge",
+       "humor",
+       "music",
+       "travel_and_tourism",
+       "cooking_and_gastronomy",
+       "beauty_and_health",
+       "sport"
+  ]
 
 #### Пример 1:
 **Входной текст**:
@@ -163,8 +242,8 @@
       }
     ],
     "eventPrice": [1125],
-    "eventCategories": ["theatre"],
-    "eventThemes": ["comedy"],
+    "eventCategories": ["theater"],
+    "eventThemes": ["humor"],
     "eventAgeLimit": "12",
     "eventLocation": {
       "name": "Театриум на Серпуховке",
@@ -221,8 +300,8 @@
     { "from": "2025-06-12T16:00:00.000Z", "to": "2025-06-12T16:00:00.000Z" }
   ],
   "eventPrice": [1125],
-  "eventCategories": ["theatre"],
-  "eventThemes": ["comedy"],
+  "eventCategories": ["theater"],
+  "eventThemes": ["humor"],
   "eventAgeLimit": "12",
   "eventLocation": {
     "name": "Театриум на Серпуховке",
