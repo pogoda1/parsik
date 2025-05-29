@@ -5,45 +5,60 @@ import os
 from utils import validate_field
 import re
 
-API_URL = "http://localhost:1234/v1/chat/completions"
+API_URL = "http://192.168.0.97:1234/v1/chat/completions"
 PROMPT_FILE = os.path.expanduser("prompt.md")
 FEW_SHOT_FILE = os.path.expanduser("few_shot.md")
 JSON_SCHEME_FILE = os.path.expanduser("json_scheme.md")
 SCHEME_HINTS_FILE = os.path.expanduser("schema_hints.md")
-MODEL_NAME = "deepseek-r1-distill-llama-8b"
+MODEL_NAME = "qwen2.5-7b-instruct-1m"
+TIMEOUT = 180
 # MODEL_NAME = "hermes-3-llama-3.2-3b"
 
 def extract_event_data_from_raw_text(raw_text):
+    print("DEBUG: raw_text type:", type(raw_text))
+    print("DEBUG: raw_text content:", raw_text)
+    
     if '```json' not in raw_text:
-        return raw_text
-    # Ищем JSON между ```json и ```
+        return {
+            "errorCode": 21,
+            "errorText": "DATE_NOT_FOUND"
+        }
+        
+    # Ищем все JSON блоки между ```json и ```
     pattern = r"```json\s*(\{.*?\})\s*```"
-    match = re.search(pattern, raw_text, re.DOTALL)
-    if not match:
-        raise ValueError("JSON block not found in the input text")
+    matches = re.finditer(pattern, raw_text, re.DOTALL)
     
-    json_str = match.group(1)
+    # Берем последний найденный JSON
+    last_match = None
+    for match in matches:
+        last_match = match
     
-    # Парсим JSON
-    data = json.loads(json_str)
-    event = data.get("data", {})
+    if not last_match:
+        return {
+            "errorCode": 22,
+            "errorText": "DATE_NOT_FOUND"
+        }
     
-    # Извлекаем поля
-    result = {
-        "eventTitle": event.get("eventTitle"),
-        "eventDescription": event.get("eventDescription"),
-        "eventDate": event.get("eventDate", []),
-        "eventPrice": event.get("eventPrice", []),
-        "eventCategories": event.get("eventCategories", []),
-        "eventThemes": event.get("eventThemes", []),
-        "eventAgeLimit": event.get("eventAgeLimit"),
-        "eventLocation": event.get("eventLocation", {}),
-        "linkSource": event.get("linkSource"),
-    }
-    
-    return result
+    json_str = last_match.group(1)
 
-
+    try:
+        data = json.loads(json_str)
+        
+        event = data.get("data", {})
+        print("DEBUG: event content:", event.get("eventDate", []))
+        
+        dateFromFirstDay = event.get("eventDate", [])[0].get("from")
+        
+        if not dateFromFirstDay or not isinstance(dateFromFirstDay, str):
+            return {
+                "errorCode": 23,
+                "errorText": "DATE_NOT_FOUND"
+            }
+        
+        return event
+    except Exception as e:
+        print("DEBUG: Error in extract_event_data_from_raw_text:", str(e))
+        raise
 
 with open(PROMPT_FILE, "r", encoding="utf-8") as f:
     PROMPT = f.read()
@@ -119,7 +134,14 @@ def call_model_api(text):
     
     full_prompt = replace_variables(PROMPT, variables)
     
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
+    
     request_data = {
         "model": MODEL_NAME,
         "messages": [
@@ -131,7 +153,7 @@ def call_model_api(text):
     
     
     try:
-        response = requests.post(API_URL, json=request_data, headers=headers, timeout=120)
+        response = requests.post(API_URL, json=request_data, headers=headers, timeout=TIMEOUT)
         # print("Respon se status:", response.status_code)
         # print("Response text:", response.text)
         response.raise_for_status()
@@ -180,7 +202,7 @@ def call_model_api(text):
         
         return result
     except requests.exceptions.Timeout:
-        return {"error": "Превышено время ожидания ответа от модели (60 секунд). Попробуйте еще раз.", "processing_time": time.time() - start_time}
+        return {"error": f"Превышено время ожидания ответа от модели ({TIMEOUT} секунд). Попробуйте еще раз.", "processing_time": time.time() - start_time}
     except requests.exceptions.ConnectionError:
         return {"error": "Не удалось подключиться к модели. Проверьте, запущен ли сервер модели.", "processing_time": time.time() - start_time}
     # except json.JSONDecodeError:

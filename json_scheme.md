@@ -2,7 +2,10 @@
   "data": {
     "eventTitle": "",
     "eventDescription": "",
-    "eventDate": [ ],
+    "eventDate": [{
+      "from": "",
+      "to": ""
+    }],
     "eventPrice": [ 0 ],
     "eventCategories": ["charity"],
     "eventThemes": ["science_and_education"],
