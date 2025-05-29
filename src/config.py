@@ -2,7 +2,7 @@ import os
 
 # API Configuration
 API_URL = "http://192.168.0.97:1234/v1/chat/completions"
-MODEL_NAME = "qwen2.5-7b-instruct-1m"
+MODEL_NAME = "devstral-small-2505_gguf"
 TIMEOUT = 180
 
 # File Paths

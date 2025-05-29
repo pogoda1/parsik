@@ -68,14 +68,6 @@ class EventExtractor:
                 
             event_dates = event.get("eventDate", [])
             if not event_dates:
-                print(ERROR_CODES['DATE_NOT_FOUND'] + '_3',event_dates)
-                print('--------------------------------')
-                print('Первоначальный текст:')
-                print(initial_text)
-                print('--------------------------------')
-                print('Ответ модели:')
-                print(raw_text)
-                print('--------------------------------')
                 return {
                     "errorCode": ERROR_CODES['DATE_NOT_FOUND'] + '_3',
                     "errorText": "DATE_NOT_FOUND"

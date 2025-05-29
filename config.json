@@ -1,0 +1,5 @@
+{
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOnsiaWQiOiI5MjZjYTBhNC1lODdmLTRhODQtYmNkYS04YWU0NzZkMmEwNDAiLCJ1c2VyTmFtZSI6Ik5pa2l0YSIsInVzZXJQaG9uZSI6IiIsInVzZXJFbWFpbCI6Im5pa2l0YS51c2hha292LjAyQGdtYWlsLmNvbSIsInVzZXJSb2xlIjoiYWRtaW4ifSwiaWF0IjoxNzQ4NTMxNTYxLCJleHAiOjE3NDg1NzQ3NjF9.qKriHiYzGlG-S4559MlY_-As7x10eBpXNl4eGJwPeDQ",
+    "model": "gpt-4o-mini",
+    "url": "https://api.openai.com/v1/chat/completions"
+}

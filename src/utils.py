@@ -46,9 +46,3 @@ class DataLoader:
                 return event
         return None 
 
-loader = DataLoader()
-data = loader.load_test_data()
-if data is None:
-    print("Файл не найден")
-else:
-    print("Файл найден") 
