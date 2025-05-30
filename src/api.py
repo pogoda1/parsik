@@ -5,7 +5,8 @@ import re
 from typing import Dict, Any, Optional, Tuple
 from src.config import (
     API_URL, MODEL_NAME, TIMEOUT, PROMPT_FILE, FEW_SHOT_FILE,
-    JSON_SCHEME_FILE, SCHEME_HINTS_FILE, ERROR_CODES
+    JSON_SCHEME_FILE, SCHEME_HINTS_FILE, ERROR_CODES, MODEL_NAME_VERY_SMART,
+    CATEGORIES_DICT, THEMES_DICT
 )
 from src.utils import EventValidator
 
@@ -39,23 +40,20 @@ class PromptManager:
 
 class EventExtractor:
     @staticmethod
-    def extract_event_data_from_raw_text(initial_text: str, raw_text: str) -> Dict[str, Any]:
+    def extract_event_data_from_raw_text(raw_text: str, initial_text: Optional[str] = None) -> Dict[str, Any]:
         """Extracts event data from raw text response"""
-        if '```json' not in raw_text:
-            return {
-                "errorCode": ERROR_CODES['DATE_NOT_FOUND']  + '_1',
-                "errorText": "DATE_NOT_FOUND"
-            }
+        # if '```json' not in raw_text:
+        #     print("DEBUG raw_text:", raw_text)
+        #     return {
+        #         "errorCode": ERROR_CODES['DATE_NOT_FOUND']  + '_1',
+        #         "errorText": "DATE_NOT_FOUND"
+        #     }
 
         pattern = r"```json\s*(\{.*?\})\s*```"
         matches = list(re.finditer(pattern, raw_text, re.DOTALL))
         
         if not matches:
-            return {
-                "errorCode": ERROR_CODES['JSON_NOT_FOUND'] + '_2',
-                "errorText": "DATE_NOT_FOUND"
-            }
-
+            return json.loads(raw_text).get("data", {})
         json_str = matches[-1].group(1)
 
         try:
@@ -96,16 +94,9 @@ class ModelAPI:
         
         try:
             response = self._make_api_request(text)
-            content = self.event_extractor.extract_event_data_from_raw_text(
-                text,
-                response["choices"][0]["message"]["content"]
-            )
-            
-            if not content:
-                raise ValueError("Empty content from model")
-
+        
             return {
-                "result": content,
+                "result": response,
                 "processing_time": time.time() - start_time
             }
 
@@ -125,7 +116,7 @@ class ModelAPI:
                 start_time
             )
 
-    def _make_api_request(self, text: str) -> Dict[str, Any]:
+    def _make_api_request(self, text: str, isVerySmart: bool = False) -> Dict[str, Any]:
         """Makes the actual API request to the model"""
         headers = {
             "Content-Type": "application/json",
@@ -136,34 +127,75 @@ class ModelAPI:
         }
         
         request_data = {
-            "model": MODEL_NAME,
+            "model": MODEL_NAME_VERY_SMART if isVerySmart else MODEL_NAME,
             "messages": [
                 {"role": "system", "content": "You are an assistant that extracts structured JSON from unstructured text."},
                 {"role": "user", "content": self.prompt_manager.prepare_prompt(text)}
             ],
             "temperature": 0.7
         }
-        
         response = requests.post(API_URL, json=request_data, headers=headers, timeout=TIMEOUT)
         response.raise_for_status()
-        
+        print(f"Получили ответ от модели {MODEL_NAME}")
+
         res_json = response.json()
-        print(res_json)
-        self._validate_response(res_json)
-        
-        return res_json
+        dict_event = EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
+        print("DEBUG content:", dict_event)
+
+        validate_response = self._validate_response(dict_event)
+        print(f"validate_response: {validate_response}")
+        if not isVerySmart and validate_response.get("type") == "all_error":
+            print(f"Модель {MODEL_NAME} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
+            if 'errorCode' not in dict_event:
+                return self._make_api_request(text, True)
+            
+
+        dict_event["eventCategories"] = validate_response.get("categories", [])
+        dict_event["eventThemes"] = validate_response.get("themes", [])
+
+        return dict_event
 
     @staticmethod
-    def _validate_response(response: Dict[str, Any]) -> None:
+    def _validate_response(response) -> bool:
         """Validates the response structure"""
-        # if "choices" not in response:
-        #     raise ValueError("No 'choices' in response")
-        # if not response["choices"]:
-        #     raise ValueError("Empty 'choices' array")
-        # if "message" not in response["choices"][0]:
-        #     raise ValueError("No 'message' in first choice")
-        # if "content" not in response["choices"][0]["message"]:
-        #     raise ValueError("No 'content' in message")
+        try:
+            themes = response.get("eventThemes", [])
+            categories = response.get("eventCategories", [])
+            
+            # Log invalid categories
+            invalid_categories = [cat for cat in categories if cat not in CATEGORIES_DICT or cat == '']
+            if invalid_categories:
+                print(f"❌ Invalid categories found: {invalid_categories}")
+            
+            # Log invalid themes
+            invalid_themes = [theme for theme in themes if theme not in THEMES_DICT or theme == '']
+            if invalid_themes:
+                print(f"❌ Invalid themes found: {invalid_themes}")
+            
+            # Remove invalid categories
+            categories[:] = [cat for cat in categories if cat in CATEGORIES_DICT and cat != '']
+            # Remove invalid themes
+            themes[:] = [theme for theme in themes if theme in THEMES_DICT and theme != '']
+            
+            if len(categories) == 0 or len(themes) == 0:
+                return {
+                    "typeError": "all_error",
+                    "categories": categories,
+                    "themes": themes
+                }
+            return {
+                "type": "success",
+                "categories": categories,
+                "themes": themes
+            }
+        except Exception as e:
+            print("validate_response error", e)
+            return     {
+                    "type": "all_error",
+                    "categories": [],
+                    "themes": []
+                }
+
 
     @staticmethod
     def _create_error_response(error_msg: str, start_time: float) -> Dict[str, Any]:

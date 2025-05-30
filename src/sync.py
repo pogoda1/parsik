@@ -3,23 +3,20 @@ import json
 import requests
 import os
 from src.api import ModelAPI
-with open('config.json', 'r', encoding='utf-8') as file:
-            config = json.load(file)
-
-accessToken = config.get("accessToken")
+from src.config import ACCESS_TOKEN
 
 async def getListForSync():
     try:
         response = requests.post(
-            'https://test-back.momenta.place/backend/integration/parsing/getEventsForParsing',
+            'https://test-back.momenta.place/backend/integration/parsing/admin/getAllEventsForParsing',
             headers={
-                'Authorization': f'Bearer {accessToken}',
+                'Authorization': f'Bearer {ACCESS_TOKEN}',
                 'Content-Type': 'application/json'
             }
         )
-        print('LOG: Получил данные с сервера: количество элементов - ', len(response.json()['data']))
+        print('LOG: Получил данные с сервера: количество элементов - ', len(response.json()['data']['data']))
         response.raise_for_status()  # Проверка на ошибки
-        return response.json()
+        return response.json()['data']['data']
     except requests.exceptions.RequestException as e:
         print(f"Error making request: {e}")
         return None
@@ -43,8 +40,8 @@ async def parseEventsFromLocalList():
 
 def parseEvent(event):
     model_api = ModelAPI()
-    response =  model_api.call_model_api(event['input'])
-    result = json.dumps(response["result"], ensure_ascii=False)  # result will be str, not dict since json.dumps returns string
+    response = model_api.call_model_api(event['input'])
+    result = json.dumps(response["result"], ensure_ascii=False, indent=2)  # result will be str, not dict since json.dumps returns string
     payload = {
         "id": event['id'],
         "result": json.loads(result)
@@ -52,23 +49,25 @@ def parseEvent(event):
     request = requests.post(
         'https://test-back.momenta.place/backend/integration/parsing/fillParsingEventResult',
         headers={
-            'Authorization': f'Bearer {accessToken}',
+            'Authorization': f'Bearer {ACCESS_TOKEN}',
             'Content-Type': 'application/json'
         },
         json=payload
     )
     fillModelLocalList({**payload, "responseFromServer": request.json(), "initial_event": event['input']})
     deleteFromLocalList(event['id'])
-    if response['result']['errorCode'] == 1:
-        print('LOG: Обработал элемент ❌ - ', event['id'])
+    
+    result_dict = response.get('result', {})
+    if isinstance(result_dict, dict) and result_dict.get('errorCode', 0) == 1:
+        print('LOG: Обработал элемент ❌ - ', event['id'], result_dict.get('errorText', ''))
     else:
         print('LOG: Обработал элемент ✅ - ', event['id'])
 
 
 
 def fillLocalList(list):    
-    if not list or 'data' not in list or not list['data']:
-        print("No data received from API")
+    if not list:
+        print("1__No data received from API")
         return
         
     
@@ -82,8 +81,8 @@ def fillLocalList(list):
             pass
     
     # Добавляем новые данные
-    if list and "data" in list:
-        existing_data["data"].extend(list["data"])
+    if list:
+        existing_data["data"].extend(list)
     
     # Записываем обновленные данные
     with open('data/notParserList.json', 'w', encoding='utf-8') as file:
@@ -92,9 +91,9 @@ def fillLocalList(list):
 
 def fillModelLocalList(payload):
     if not payload:
-        print("No data received from API")
+        print("2__No data received from API")
         return
-    result = json.dumps(payload, ensure_ascii=False)  # result will be str, not dict since json.dumps returns string
+    result = json.dumps(payload, ensure_ascii=False, indent=2)  # result will be str, not dict since json.dumps returns string
    
     # Сначала читаем существующие данные
     existing_data = {"data": []}
