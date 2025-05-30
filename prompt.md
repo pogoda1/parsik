@@ -64,7 +64,7 @@
 
 ```json
 {
-  "errorCode": 25,
+  "errorCode": 2,
   "errorText": "DATE_NOT_FOUND"
 }
 ```

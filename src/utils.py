@@ -26,7 +26,7 @@ class EventValidator:
 
 class DataLoader:
     def __init__(self):
-        self.test_data_file = "dataForParse/SwaggerUIresponse_1.json"
+        self.test_data_file = "data/notParserList.json"
 
     def load_test_data(self) -> Optional[Dict[str, Any]]:
         """Loads test data from JSON file"""

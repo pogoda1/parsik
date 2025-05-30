@@ -9,6 +9,7 @@ from src.config import (
     CATEGORIES_DICT, THEMES_DICT
 )
 from src.utils import EventValidator
+import aiohttp
 
 class PromptManager:
     def __init__(self):
@@ -42,12 +43,6 @@ class EventExtractor:
     @staticmethod
     def extract_event_data_from_raw_text(raw_text: str, initial_text: Optional[str] = None) -> Dict[str, Any]:
         """Extracts event data from raw text response"""
-        # if '```json' not in raw_text:
-        #     print("DEBUG raw_text:", raw_text)
-        #     return {
-        #         "errorCode": ERROR_CODES['DATE_NOT_FOUND']  + '_1',
-        #         "errorText": "DATE_NOT_FOUND"
-        #     }
 
         pattern = r"```json\s*(\{.*?\})\s*```"
         matches = list(re.finditer(pattern, raw_text, re.DOTALL))
@@ -68,6 +63,7 @@ class EventExtractor:
             if not event_dates:
                 return {
                     "errorCode": ERROR_CODES['DATE_NOT_FOUND'] + '_3',
+                    "errorDetails": json.dumps(event, ensure_ascii=False, indent=2),
                     "errorText": "DATE_NOT_FOUND"
                 }
             
@@ -76,6 +72,7 @@ class EventExtractor:
             if not date_from_first_day or not isinstance(date_from_first_day, str):
                 return {
                     "errorCode": ERROR_CODES['INVALID_DATE'] + '_4',
+                    "errorDetails": json.dumps(event, ensure_ascii=False, indent=2),
                     "errorText": "DATE_NOT_FOUND"
                 }
             
@@ -88,12 +85,12 @@ class ModelAPI:
         self.prompt_manager = PromptManager()
         self.event_extractor = EventExtractor()
 
-    def call_model_api(self, text: str) -> Dict[str, Any]:
+    async def call_model_api(self, text: str) -> Dict[str, Any]:
         """Calls the model API and processes the response"""
         start_time = time.time()
         
         try:
-            response = self._make_api_request(text)
+            response = await self._make_api_request(text)
         
             return {
                 "result": response,
@@ -102,21 +99,21 @@ class ModelAPI:
 
         except requests.exceptions.Timeout:
             return self._create_error_response(
-                f"Превышено время ожидания ответа от модели ({TIMEOUT} секунд). Попробуйте еще раз.",
+                f"⏰ Превышено время ожидания ответа от модели ({TIMEOUT} секунд). Попробуйте еще раз.",
                 start_time
             )
         except requests.exceptions.ConnectionError:
             return self._create_error_response(
-                "Не удалось подключиться к модели. Проверьте, запущен ли сервер модели.",
+                "🔌 Не удалось подключиться к модели. Проверьте, запущен ли сервер модели.",
                 start_time
             )
         except Exception as e:
             return self._create_error_response(
-                f"Ошибка при вызове модели: {str(e)}",
+                f"💥 Ошибка при вызове модели: {str(e)}",
                 start_time
             )
 
-    def _make_api_request(self, text: str, isVerySmart: bool = False) -> Dict[str, Any]:
+    async def _make_api_request(self, text: str, isVerySmart: bool = False) -> Dict[str, Any]:
         """Makes the actual API request to the model"""
         headers = {
             "Content-Type": "application/json",
@@ -125,35 +122,31 @@ class ModelAPI:
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type"
         }
+        current_model = MODEL_NAME_VERY_SMART if isVerySmart else MODEL_NAME
         
         request_data = {
-            "model": MODEL_NAME_VERY_SMART if isVerySmart else MODEL_NAME,
+            "model": current_model,
             "messages": [
                 {"role": "system", "content": "You are an assistant that extracts structured JSON from unstructured text."},
                 {"role": "user", "content": self.prompt_manager.prepare_prompt(text)}
             ],
             "temperature": 0.7
         }
-        response = requests.post(API_URL, json=request_data, headers=headers, timeout=TIMEOUT)
-        response.raise_for_status()
-        print(f"Получили ответ от модели {MODEL_NAME}")
+        async with aiohttp.ClientSession() as session:
+            async with session.post(API_URL, json=request_data, headers=headers, timeout=TIMEOUT) as response:
+                response.raise_for_status()
+                res_json = await response.json()
+                dict_event = EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
 
-        res_json = response.json()
-        dict_event = EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
-        print("DEBUG content:", dict_event)
+                validate_response = self._validate_response(dict_event)
+                if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
+                    print(f"♻️ Модель {current_model} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
+                    return await self._make_api_request(text, True)
 
-        validate_response = self._validate_response(dict_event)
-        print(f"validate_response: {validate_response}")
-        if not isVerySmart and validate_response.get("type") == "all_error":
-            print(f"Модель {MODEL_NAME} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
-            if 'errorCode' not in dict_event:
-                return self._make_api_request(text, True)
-            
+                dict_event["eventCategories"] = validate_response.get("categories", [])
+                dict_event["eventThemes"] = validate_response.get("themes", [])
 
-        dict_event["eventCategories"] = validate_response.get("categories", [])
-        dict_event["eventThemes"] = validate_response.get("themes", [])
-
-        return dict_event
+                return dict_event
 
     @staticmethod
     def _validate_response(response) -> bool:
@@ -165,12 +158,12 @@ class ModelAPI:
             # Log invalid categories
             invalid_categories = [cat for cat in categories if cat not in CATEGORIES_DICT or cat == '']
             if invalid_categories:
-                print(f"❌ Invalid categories found: {invalid_categories}")
+                print(f"🏷️ Invalid categories found: {invalid_categories}")
             
             # Log invalid themes
             invalid_themes = [theme for theme in themes if theme not in THEMES_DICT or theme == '']
             if invalid_themes:
-                print(f"❌ Invalid themes found: {invalid_themes}")
+                print(f"🎯 Invalid themes found: {invalid_themes}")
             
             # Remove invalid categories
             categories[:] = [cat for cat in categories if cat in CATEGORIES_DICT and cat != '']
@@ -178,6 +171,8 @@ class ModelAPI:
             themes[:] = [theme for theme in themes if theme in THEMES_DICT and theme != '']
             
             if len(categories) == 0 or len(themes) == 0:
+                print(f"🏷️  categories after clean: {categories}")
+                print(f"🎯 themes after clean: {themes}")
                 return {
                     "typeError": "all_error",
                     "categories": categories,
@@ -189,7 +184,7 @@ class ModelAPI:
                 "themes": themes
             }
         except Exception as e:
-            print("validate_response error", e)
+            print("💥 validate_response error", e)
             return     {
                     "type": "all_error",
                     "categories": [],

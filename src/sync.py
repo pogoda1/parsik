@@ -14,11 +14,10 @@ async def getListForSync():
                 'Content-Type': 'application/json'
             }
         )
-        print('LOG: Получил данные с сервера: количество элементов - ', len(response.json()['data']['data']))
         response.raise_for_status()  # Проверка на ошибки
         return response.json()['data']['data']
     except requests.exceptions.RequestException as e:
-        print(f"Error making request: {e}")
+        print(f"🌐 Error making request: {e}")
         return None
 
 
@@ -36,11 +35,11 @@ async def parseEventsFromLocalList():
         existing_data = json.load(file)
     # [:1] берет только первый элемент из списка data
     for event in existing_data['data']:
-        parseEvent(event)        
+        await parseEvent(event)        
 
-def parseEvent(event):
+async def parseEvent(event):
     model_api = ModelAPI()
-    response = model_api.call_model_api(event['input'])
+    response = await model_api.call_model_api(event['input'])
     result = json.dumps(response["result"], ensure_ascii=False, indent=2)  # result will be str, not dict since json.dumps returns string
     payload = {
         "id": event['id'],
@@ -59,15 +58,15 @@ def parseEvent(event):
     
     result_dict = response.get('result', {})
     if isinstance(result_dict, dict) and result_dict.get('errorCode', 0) == 1:
-        print('LOG: Обработал элемент ❌ - ', event['id'], result_dict.get('errorText', ''))
+        print('🚫 Обработал элемент - ', event['id'], result_dict.get('errorText', ''))
     else:
-        print('LOG: Обработал элемент ✅ - ', event['id'])
+        print('✅ Обработал элемент - ', event['id'])
 
 
 
 def fillLocalList(list):    
     if not list:
-        print("1__No data received from API")
+        print("📭 No data received from API")
         return
         
     
@@ -91,7 +90,7 @@ def fillLocalList(list):
 
 def fillModelLocalList(payload):
     if not payload:
-        print("2__No data received from API")
+        print("📭 No data received from API")
         return
     result = json.dumps(payload, ensure_ascii=False, indent=2)  # result will be str, not dict since json.dumps returns string
    
@@ -124,7 +123,7 @@ async def sync():
         await parseEventsFromLocalList()
             
     except Exception as e:
-        print(f"Error loading config: {e}")
+        print(f"💥 Error loading config: {e}")
 
 if __name__ == "__main__":
     asyncio.run(sync())

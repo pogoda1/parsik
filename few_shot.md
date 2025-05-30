@@ -110,7 +110,7 @@ eventCategories и eventThemes должны содержать только зн
 **Ожидаемый результат**:
 ```json
 {
-            "errorCode": 24,
+            "errorCode": 2,
             "errorText": "DATE_NOT_FOUND"
 }
 ```
@@ -192,7 +192,7 @@ eventCategories и eventThemes должны содержать только зн
 **Ожидаемый результат**:
 ```json
 {
-  "errorCode": 1,
+  "errorCode": 2,
   "errorText": "DATE_NOT_FOUND"
 }
 ```
