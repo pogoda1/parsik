@@ -2,7 +2,7 @@ from flask import Flask, jsonify, render_template_string
 from src.api import ModelAPI
 from .utils import DataLoader
 from .templates import MAIN_TEMPLATE
-from .sync import getListForSync ,fillLocalList
+from .sync import getListForSync ,fillLocalList, clearLocalList
 app = Flask(__name__)
 model_api = ModelAPI()
 data_loader = DataLoader()
@@ -13,6 +13,7 @@ def index():
 
 @app.route("/get_events", methods=["GET"])
 async def get_events():
+    clearLocalList()
     list = await getListForSync()
     fillLocalList(list)
     data = data_loader.load_test_data()

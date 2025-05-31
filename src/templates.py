@@ -14,18 +14,43 @@ MAIN_TEMPLATE = """
   .correction { color: #ff8c00; }
   .event-container { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
   .timestamp { color: #666; font-size: 0.9em; }
+  .counter { 
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #f8f9fa;
+    padding: 10px 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    font-size: 14px;
+  }
+  .counter span {
+    font-weight: bold;
+    color: #007bff;
+  }
 </style>
 </head>
 <body>
   <h1>Обработка событий AI</h1>
   <button id="loadBtn">Загрузить и обработать события</button>
+  <div id="counter" class="counter" style="display: none;">
+    Обработано: <span id="processed">0</span> из <span id="total">0</span>
+  </div>
   <div id="output"></div>
 
 <script>
   const btn = document.getElementById('loadBtn');
   const output = document.getElementById('output');
+  const counter = document.getElementById('counter');
+  const processedSpan = document.getElementById('processed');
+  const totalSpan = document.getElementById('total');
   let currentEventIndex = 0;
   let events = [];
+
+  function updateCounter() {
+    processedSpan.textContent = currentEventIndex;
+    totalSpan.textContent = events.length;
+  }
 
   function formatTime(seconds) {
     return seconds.toFixed(2) + ' сек';
@@ -84,6 +109,7 @@ MAIN_TEMPLATE = """
 
     const event = events[currentEventIndex];
     updateEventDisplay(event, 'Обработка...');
+    updateCounter();
 
     try {
       const response = await fetch(`/process_single/${event.id}`);
@@ -102,17 +128,22 @@ MAIN_TEMPLATE = """
   btn.addEventListener('click', async () => {
     output.innerHTML = '';
     currentEventIndex = 0;
+    counter.style.display = 'block';
     
     try {
       const response = await fetch('/get_events');
       events = await response.json();
+      console.log(events);
       if (!Array.isArray(events)) {
         output.innerHTML = '<p class="error">Ошибка сервера или файл не найден.</p>';
+        counter.style.display = 'none';
         return;
       }
+      updateCounter();
       processNextEvent();
     } catch (err) {
       output.innerHTML = '<p class="error">Ошибка при загрузке: ' + err.message + '</p>';
+      counter.style.display = 'none';
     }
   });
 </script>

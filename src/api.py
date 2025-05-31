@@ -61,9 +61,10 @@ class EventExtractor:
                 
             event_dates = event.get("eventDate", [])
             if not event_dates:
+                print(f"🏷️ event: {event}")
                 return {
                     "errorCode": ERROR_CODES['DATE_NOT_FOUND'] + '_3',
-                    "errorDetails": json.dumps(event, ensure_ascii=False, indent=2),
+                    "errorDetails": event,
                     "errorText": "DATE_NOT_FOUND"
                 }
             
@@ -138,18 +139,22 @@ class ModelAPI:
                 res_json = await response.json()
                 dict_event = EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
 
-                validate_response = self._validate_response(dict_event)
+                validate_response = self._validate_response(dict_event, text)
                 if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
                     print(f"♻️ Модель {current_model} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
                     return await self._make_api_request(text, True)
 
-                dict_event["eventCategories"] = validate_response.get("categories", [])
-                dict_event["eventThemes"] = validate_response.get("themes", [])
+                print(f"🏷️ success: {dict_event.get('eventTitle', '')} model {current_model}")
+                for key in validate_response.keys():
+                    if key not in dict_event:
+                        if key == "type":
+                            continue
+                        dict_event[key] = validate_response.get(key, "")
 
                 return dict_event
 
     @staticmethod
-    def _validate_response(response) -> bool:
+    def _validate_response(response, initial_text: str) -> bool:
         """Validates the response structure"""
         try:
             themes = response.get("eventThemes", [])
@@ -174,21 +179,46 @@ class ModelAPI:
                 print(f"🏷️  categories after clean: {categories}")
                 print(f"🎯 themes after clean: {themes}")
                 return {
-                    "typeError": "all_error",
-                    "categories": categories,
-                    "themes": themes
+                    "type": "error",
+                    "eventCategories": categories,
+                    "eventThemes": themes
                 }
+            
+            if response.get("eventAgeLimit") == "":
+                return {
+                    "type": "success",
+                    "eventAgeLimit": '12',
+                }
+            if response.get("eventTitle") == "":
+                return {
+                    "type": "error",
+                    "eventCategories": categories,
+                    "eventThemes": themes
+                }
+            linkSource = response.get("linkSource")
+            if linkSource and linkSource not in initial_text:
+                if 'https://' not in linkSource:
+                    return {
+                    "type": "error",
+                    'linkSource': ''
+                    }
+                else:
+                    return {
+                        "type": "error",
+                        'linkSource': linkSource
+                    }
+                
             return {
                 "type": "success",
-                "categories": categories,
-                "themes": themes
+                "eventCategories": categories,
+                "eventThemes": themes
             }
         except Exception as e:
             print("💥 validate_response error", e)
             return     {
-                    "type": "all_error",
-                    "categories": [],
-                    "themes": []
+                    "type": "error",
+                    "eventCategories": [],
+                    "eventThemes": []
                 }
 
 

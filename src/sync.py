@@ -21,6 +21,10 @@ async def getListForSync():
         return None
 
 
+def clearLocalList():
+    with open('data/notParserList.json', 'w', encoding='utf-8') as file:
+        json.dump({"data": []}, file, ensure_ascii=False, indent=4)
+
 def deleteFromLocalList(id):
     with open('data/notParserList.json', 'r', encoding='utf-8') as file:
         existing_data = json.load(file)
