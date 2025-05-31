@@ -2,6 +2,7 @@ import asyncio
 import json
 import requests
 import os
+from time import sleep
 from src.api import ModelAPI
 from src.config import ACCESS_TOKEN
 from datetime import datetime
