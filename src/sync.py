@@ -14,14 +14,14 @@ async def getListForSync():
     try:
         print(f"[{get_timestamp()}] 🔄 Starting to fetch list for sync")
         response = requests.post(
-            'https://test-back.momenta.place/backend/integration/parsing/admin/getAllEventsForParsing',
+            'https://test-back.momenta.place/backend/integration/parsing/getEventsForParsing',
             headers={
                 'Authorization': f'Bearer {ACCESS_TOKEN}',
                 'Content-Type': 'application/json'
             }
         )
         response.raise_for_status()  # Проверка на ошибки
-        return response.json()['data']['data']
+        return response.json()['data']
     except requests.exceptions.RequestException as e:
         print(f"[{get_timestamp()}] 🌐 Error making request: {e}")
         return None
@@ -142,9 +142,9 @@ async def sync():
         # Создаем директорию если её нет
         os.makedirs('data', exist_ok=True)
         
-        # list = await getListForSync()
-        # print(f"[{get_timestamp()}] 🔄 Получил список из {len(list)} элементов")
-        # fillLocalList(list)
+        list = await getListForSync()
+        print(f"[{get_timestamp()}] 🔄 Получил список из {len(list)} элементов")
+        fillLocalList(list)
         await parseEventsFromLocalList()
             
     except Exception as e:

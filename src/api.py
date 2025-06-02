@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, Tuple
 from src.config import (
     API_URL, MODEL_NAME, TIMEOUT, PROMPT_FILE, FEW_SHOT_FILE,
     JSON_SCHEME_FILE, SCHEME_HINTS_FILE, ERROR_CODES, MODEL_NAME_VERY_SMART,
-    CATEGORIES_DICT, THEMES_DICT
+    CATEGORIES_DICT, THEMES_DICT, EVENT_AGE_LIMITS
 )
 from src.utils import EventValidator
 import aiohttp
@@ -195,7 +195,7 @@ class ModelAPI:
                     "eventThemes": themes
                 }
             
-            if response.get("eventAgeLimit") == "":
+            if not response.get("eventAgeLimit") or response.get("eventAgeLimit") not in EVENT_AGE_LIMITS:
                 return {
                     "type": "success",
                     "eventAgeLimit": '12',
@@ -208,16 +208,10 @@ class ModelAPI:
                 }
             linkSource = response.get("linkSource")
             if linkSource and linkSource not in initial_text:
-                if 'https://' not in linkSource:
-                    return {
-                    "type": "error",
-                    'linkSource': ''
-                    }
-                else:
-                    return {
-                        "type": "error",
-                        'linkSource': linkSource
-                    }
+                return {
+                    "type": "success",
+                    'linkSource': ""
+                }
                 
             return {
                 "type": "success",
