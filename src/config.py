@@ -2,7 +2,7 @@ import os
 
 # API Configuration
 API_URL = "http://192.168.0.97:1234/v1/chat/completions"
-MODEL_NAME = "qwen2.5-7b-instruct-1m"
+MODEL_NAME = "mathstral-7b-v0.1"
 MODEL_NAME_VERY_SMART = "devstral-small-2505_gguf"
 TIMEOUT = 800
 ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOnsiaWQiOiI5MjZjYTBhNC1lODdmLTRhODQtYmNkYS04YWU0NzZkMmEwNDAiLCJ1c2VyTmFtZSI6Ik5pa2l0YSIsInVzZXJQaG9uZSI6IiIsInVzZXJFbWFpbCI6Im5pa2l0YS51c2hha292LjAyQGdtYWlsLmNvbSIsInVzZXJSb2xlIjoiYWRtaW4ifSwiaWF0IjoxNzQ4NzI4NDYwLCJleHAiOjE3NTEzMjA0NjB9.8L12Gv6HZUv4AT1_B6_ucpzSetCag6ya0i-0el8C424"
@@ -23,7 +23,8 @@ EVENT_AGE_LIMITS = ('0', '6', '12', '16', '18')
 ERROR_CODES = {
     'DATE_NOT_FOUND': '1',
     'JSON_NOT_FOUND': '2',
-    'INVALID_DATE': '3'
+    'INVALID_DATE': '3',
+    'NOT_PARSED': '4'
 } 
 
 

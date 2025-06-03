@@ -81,6 +81,16 @@ async def parseEvent(event):
             print(f"[{get_timestamp()}] 🚫 Обработал элемент - {event['id']} {result_dict.get('errorText', '')}")
         else:
             print(f"[{get_timestamp()}] ✅ Обработал элемент - {event['id']}")
+            
+        # Report statistics at key points
+        stats = model_api.get_stats()
+        total_events = stats['total_events']
+        
+        if total_events in [10, 50, 100]:
+            print(f"\n📊 Статистика обработки {total_events} событий:")
+            print(f"⏱️ Среднее время обработки: {stats['avg_processing_time']:.2f} сек")
+            print(f"🧠 Использование мощной нейронки: {stats['very_smart_usage_percent']:.1f}%\n")
+            
     except Exception as e:
         print(f"[{get_timestamp()}] 💥 Error processing event {event['id']}: {e}")
         # Удаляем проблемный элемент из списка чтобы не зациклиться

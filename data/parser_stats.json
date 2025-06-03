@@ -1,0 +1,21 @@
+{
+  "total_events": 1,
+  "current_stats": {
+    "avg_processing_time": 236.26820826530457,
+    "smart_usage_percent": 100.0
+  },
+  "milestones": {
+    "10": {
+      "avg_time": 0,
+      "smart_usage": 0
+    },
+    "50": {
+      "avg_time": 0,
+      "smart_usage": 0
+    },
+    "100": {
+      "avg_time": 0,
+      "smart_usage": 0
+    }
+  }
+}

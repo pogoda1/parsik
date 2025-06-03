@@ -91,6 +91,57 @@ class ModelAPI:
         print(f"[{get_timestamp()}] 🧠 Initializing ModelAPI")
         self.prompt_manager = PromptManager()
         self.event_extractor = EventExtractor()
+        self.stats = {
+            'total_events': 0,
+            'processing_times': [],
+            'very_smart_usage': 0,
+            'milestones': {
+                '10': {'avg_time': 0, 'smart_usage': 0},
+                '50': {'avg_time': 0, 'smart_usage': 0},
+                '100': {'avg_time': 0, 'smart_usage': 0}
+            }
+        }
+
+    def save_stats_to_json(self):
+        """Saves current statistics to JSON file"""
+        stats_data = {
+            'total_events': self.stats['total_events'],
+            'current_stats': {
+                'avg_processing_time': sum(self.stats['processing_times']) / len(self.stats['processing_times']) if self.stats['processing_times'] else 0,
+                'smart_usage_percent': (self.stats['very_smart_usage'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0
+            },
+            'milestones': self.stats['milestones']
+        }
+        
+        with open('data/parser_stats.json', 'w', encoding='utf-8') as f:
+            json.dump(stats_data, f, ensure_ascii=False, indent=2)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Returns processing statistics"""
+        if not self.stats['processing_times']:
+            return {
+                'total_events': 0,
+                'avg_processing_time': 0,
+                'very_smart_usage_percent': 0
+            }
+            
+        avg_time = sum(self.stats['processing_times']) / len(self.stats['processing_times'])
+        smart_usage_percent = (self.stats['very_smart_usage'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0
+        
+        # Update milestones if we hit one
+        total_events = self.stats['total_events']
+        if str(total_events) in self.stats['milestones']:
+            self.stats['milestones'][str(total_events)] = {
+                'avg_time': avg_time,
+                'smart_usage': smart_usage_percent
+            }
+            self.save_stats_to_json()
+            
+        return {
+            'total_events': total_events,
+            'avg_processing_time': avg_time,
+            'very_smart_usage_percent': smart_usage_percent
+        }
 
     async def call_model_api(self, text: str) -> Dict[str, Any]:
         """Calls the model API and processes the response"""
@@ -99,10 +150,17 @@ class ModelAPI:
         
         try:
             response = await self._make_api_request(text)
-            print(f"[{get_timestamp()}] ✅ AI model call completed in {time.time() - start_time:.2f} seconds")
+            processing_time = time.time() - start_time
+            self.stats['total_events'] += 1
+            self.stats['processing_times'].append(processing_time)
+            
+            # Save stats after each request
+            self.save_stats_to_json()
+            
+            print(f"[{get_timestamp()}] ✅ AI model call completed in {processing_time:.2f} seconds")
             return {
                 "result": response,
-                "processing_time": time.time() - start_time
+                "processing_time": processing_time
             }
 
         except requests.exceptions.Timeout:
@@ -123,45 +181,89 @@ class ModelAPI:
 
     async def _make_api_request(self, text: str, isVerySmart: bool = False) -> Dict[str, Any]:
         """Makes the actual API request to the model"""
-        print(f"[{get_timestamp()}] 📡 Making API request to model")
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type"
-        }
-        current_model = MODEL_NAME_VERY_SMART if isVerySmart else MODEL_NAME
-        
-        request_data = {
-            "model": current_model,
+        if isVerySmart:
+            return await self._make_very_smart_request(text)
+        return await self._make_regular_request(text)
+
+    def _get_request_data(self, model_name: str, text: str) -> Dict[str, Any]:
+        """Prepares request data for API call"""
+        return {
+            "model": model_name,
             "messages": [
                 {"role": "system", "content": "You are an assistant that extracts structured JSON from unstructured text."},
                 {"role": "user", "content": self.prompt_manager.prepare_prompt(text)}
             ],
             "temperature": 0.7
         }
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Returns common headers for API requests"""
+        return {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+        }
+
+    async def _process_response(self, response: aiohttp.ClientResponse, model_name: str) -> Dict[str, Any]:
+        """Processes API response and extracts event data"""
+        response.raise_for_status()
+        res_json = await response.json()
+        return EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
+
+    def _update_event_with_validation(self, dict_event: Dict[str, Any], validate_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Updates event data with validation results"""
+        for key in validate_response.keys():
+            if key not in dict_event and key != "type":
+                dict_event[key] = validate_response.get(key, "")
+        return dict_event
+
+    async def _make_regular_request(self, text: str) -> Dict[str, Any]:
+        """Makes API request using regular model"""
+        print(f"[{get_timestamp()}] 📡 Making API request to regular model")
+        
         async with aiohttp.ClientSession() as session:
-            async with session.post(API_URL, json=request_data, headers=headers, timeout=TIMEOUT) as response:
-                response.raise_for_status()
-                res_json = await response.json()
-                dict_event = EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
-
+            async with session.post(
+                API_URL, 
+                json=self._get_request_data(MODEL_NAME, text), 
+                headers=self._get_headers(), 
+                timeout=TIMEOUT
+            ) as response:
+                dict_event = await self._process_response(response, MODEL_NAME)
                 validate_response = self._validate_response(dict_event, text)
+
                 if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
-                    print(f"[{get_timestamp()}] ♻️ Модель {current_model} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
-                    responseVerySmart = await self._make_api_request(text, True)
-                    print(f"[{get_timestamp()}] 🏷️ have answer from responseVerySmart")
-                    return responseVerySmart
+                    print(f"[{get_timestamp()}] ♻️ Модель {MODEL_NAME} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
+                    return await self._make_very_smart_request(text)
 
-                print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {current_model}")
-                for key in validate_response.keys():
-                    if key not in dict_event:
-                        if key == "type":
-                            continue
-                        dict_event[key] = validate_response.get(key, "")
+                print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {MODEL_NAME}")
+                return self._update_event_with_validation(dict_event, validate_response)
 
-                return dict_event
+    async def _make_very_smart_request(self, text: str) -> Dict[str, Any]:
+        """Makes API request using very smart model"""
+        print(f"[{get_timestamp()}] 📡 Making API request to very smart model")
+        self.stats['very_smart_usage'] += 1
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                API_URL, 
+                json=self._get_request_data(MODEL_NAME_VERY_SMART, text), 
+                headers=self._get_headers(), 
+                timeout=TIMEOUT
+            ) as response:
+                dict_event = await self._process_response(response, MODEL_NAME_VERY_SMART)
+                validate_response = self._validate_response(dict_event, text)
+
+                if validate_response.get("type") == "error":
+                    return {
+                        'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
+                        'errorDetails': dict_event,
+                        'errorText': 'NOT_PARSED'
+                    }
+
+                print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {MODEL_NAME_VERY_SMART}")
+                return self._update_event_with_validation(dict_event, validate_response)
 
     @staticmethod
     def _validate_response(response, initial_text: str) -> bool:
@@ -212,7 +314,12 @@ class ModelAPI:
                     "type": "success",
                     'linkSource': ""
                 }
-                
+            else:
+                return {
+                    "type": "success",
+                    "linkSource": linkSource if 'https://' in linkSource else ''
+                }
+            
             return {
                 "type": "success",
                 "eventCategories": categories,
@@ -220,7 +327,7 @@ class ModelAPI:
             }
         except Exception as e:
             print(f"[{get_timestamp()}] 💥 validate_response error {e}")
-            return     {
+            return {
                     "type": "error",
                     "eventCategories": [],
                     "eventThemes": []

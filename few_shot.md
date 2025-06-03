@@ -2,18 +2,12 @@
 ### Few-Shot примеры:
 Ниже приведены примеры входных данных и ожидаемых результатов, чтобы модель могла лучше понять логику валидации.
 ❗Важно:
-
-eventCategories и eventThemes должны содержать только значения из допустимых списков ниже.
-
-Если распознанное значение не входит в список — оно не включается в итоговый JSON.
-
 Если не удалось извлечь валидную категорию — выдать ошибку:
 
 {
   "errorCode": 3,
   "errorText": "INVALID_CATEGORY"
 }
-
 
 Если категорию удалось определить, но тематика невалидна или отсутствует — выдать ошибку:
 
@@ -22,64 +16,6 @@ eventCategories и eventThemes должны содержать только зн
   "errorText": "INVALID_THEME"
 }
 Ошибка INVALID_CATEGORY имеет приоритет над INVALID_THEME.
-
- Допустимые eventCategories:
-  [
-       "excursion",
-       "exhibitions",
-       "well",
-       "lecture",
-       "seminar",
-       "conference",
-       "presentation",
-       "webinar",
-       "training",
-       "master_class",
-       "vorkshop",
-       "business_game",
-       "class",
-       "forum",
-       "mitap",
-       "business_breakfast",
-       "meeting",
-       "networking",
-       "mastermind",
-       "theater",
-       "movie",
-       "stand__up",
-       "concerts",
-       "party",
-       "circus",
-       "festivals",
-       "show",
-       "games",
-       "active_rest",
-       "olympics",
-       "battle",
-       "championship",
-       "league",
-       "competition",
-       "volunteering",
-       "charity",
-       "social_initiatives",
-     ]
-
-Допустимые eventThemes:
-  [
-       "culture_and_art",
-       "science_and_education",
-       "industry_specialized",
-       "it_and_the_internet",
-       "business_and_entrepreneurship",
-       "visual_creativity_visual_graphics",
-       "psychology_and_self__knowledge",
-       "humor",
-       "music",
-       "travel_and_tourism",
-       "cooking_and_gastronomy",
-       "beauty_and_health",
-       "sport"
-  ]
 
 #### Пример 1:
 **Входной текст**:
@@ -150,7 +86,7 @@ eventCategories и eventThemes должны содержать только зн
     }],
   "eventPrice": [0],
   "eventCategories": ["battle"],
-  "eventThemes": [],
+  "eventThemes": ["culture_and_art"],
 }
 ```
 
