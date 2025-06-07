@@ -4,12 +4,12 @@ import time
 import re
 from typing import Dict, Any, Optional, Tuple
 from src.config import (
-    API_URL, MODEL_NAME, TIMEOUT, PROMPT_FILE, FEW_SHOT_FILE,
+     MODEL_NAME, TIMEOUT, PROMPT_FILE, FEW_SHOT_FILE,
     JSON_SCHEME_FILE, SCHEME_HINTS_FILE, ERROR_CODES, MODEL_NAME_VERY_SMART,
     CATEGORIES_DICT, THEMES_DICT, EVENT_AGE_LIMITS
 )
 from src.utils import EventValidator
-import aiohttp
+from src.local_model import LocalModel
 from datetime import datetime
 
 def get_timestamp():
@@ -91,6 +91,7 @@ class ModelAPI:
         print(f"[{get_timestamp()}] 🧠 Initializing ModelAPI")
         self.prompt_manager = PromptManager()
         self.event_extractor = EventExtractor()
+        self.model = LocalModel()
         self.stats = {
             'total_events': 0,
             'processing_times': [],
@@ -185,17 +186,9 @@ class ModelAPI:
             return await self._make_very_smart_request(text)
         return await self._make_regular_request(text)
 
-    def _get_request_data(self, model_name: str, text: str) -> Dict[str, Any]:
+    def _get_request_data(self, text: str) -> Dict[str, Any]:
         """Prepares request data for API call"""
-        return {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": "You are an assistant that extracts structured JSON from unstructured text."},
-                {"role": "user", "content": self.prompt_manager.prepare_prompt(text)}
-            ],
-            "temperature": 0.7
-        }
-
+        return self.prompt_manager.prepare_prompt(text)
     def _get_headers(self) -> Dict[str, str]:
         """Returns common headers for API requests"""
         return {
@@ -206,11 +199,11 @@ class ModelAPI:
             "Access-Control-Allow-Headers": "Content-Type"
         }
 
-    async def _process_response(self, response: aiohttp.ClientResponse, model_name: str) -> Dict[str, Any]:
-        """Processes API response and extracts event data"""
-        response.raise_for_status()
-        res_json = await response.json()
-        return EventExtractor.extract_event_data_from_raw_text(res_json["choices"][0]["message"]["content"])
+    def _process_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Processes model response and extracts event data"""
+        return self.event_extractor.extract_event_data_from_raw_text(
+            response["choices"][0]["message"]["content"]
+        )
 
     def _update_event_with_validation(self, dict_event: Dict[str, Any], validate_response: Dict[str, Any]) -> Dict[str, Any]:
         """Updates event data with validation results"""
@@ -220,50 +213,53 @@ class ModelAPI:
         return dict_event
 
     async def _make_regular_request(self, text: str) -> Dict[str, Any]:
-        """Makes API request using regular model"""
-        print(f"[{get_timestamp()}] 📡 Making API request to regular model")
+        """Makes request using regular model"""
+        print(f"[{get_timestamp()}] 📡 Making request to regular model")
         
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                API_URL, 
-                json=self._get_request_data(MODEL_NAME, text), 
-                headers=self._get_headers(), 
-                timeout=TIMEOUT
-            ) as response:
-                dict_event = await self._process_response(response, MODEL_NAME)
-                validate_response = self._validate_response(dict_event, text)
+        try:
+            response = self.model.generate_response(
+                self._get_request_data(text),
+                MODEL_NAME
+            )
+            print(f"[{get_timestamp()}] 📡 response: {response}")
+            dict_event = self._process_response(response)
+            validate_response = self._validate_response(dict_event, text)
 
-                if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
-                    print(f"[{get_timestamp()}] ♻️ Модель {MODEL_NAME} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
-                    return await self._make_very_smart_request(text)
+            if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
+                print(f"[{get_timestamp()}] ♻️ Модель {MODEL_NAME} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
+                return await self._make_very_smart_request(text)
 
-                print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {MODEL_NAME}")
-                return self._update_event_with_validation(dict_event, validate_response)
+            print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {MODEL_NAME.split('/')[-1]}")
+            return self._update_event_with_validation(dict_event, validate_response)
+        except Exception as e:
+            print(f"[{get_timestamp()}] 💥 Error in _make_regular_request: {str(e)}")
+            raise
 
     async def _make_very_smart_request(self, text: str) -> Dict[str, Any]:
-        """Makes API request using very smart model"""
-        print(f"[{get_timestamp()}] 📡 Making API request to very smart model")
+        """Makes request using very smart model"""
+        print(f"[{get_timestamp()}] 📡 Making request to very smart model")
         self.stats['very_smart_usage'] += 1
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                API_URL, 
-                json=self._get_request_data(MODEL_NAME_VERY_SMART, text), 
-                headers=self._get_headers(), 
-                timeout=TIMEOUT
-            ) as response:
-                dict_event = await self._process_response(response, MODEL_NAME_VERY_SMART)
-                validate_response = self._validate_response(dict_event, text)
+        try:
+            response = self.model.generate_response(
+                self._get_request_data(text),
+                MODEL_NAME_VERY_SMART
+            )
+            dict_event = self._process_response(response)
+            validate_response = self._validate_response(dict_event, text)
 
-                if validate_response.get("type") == "error":
-                    return {
-                        'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
-                        'errorDetails': dict_event,
-                        'errorText': 'NOT_PARSED'
-                    }
+            if validate_response.get("type") == "error":
+                return {
+                    'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
+                    'errorDetails': dict_event,
+                    'errorText': 'NOT_PARSED'
+                }
 
-                print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {MODEL_NAME_VERY_SMART}")
-                return self._update_event_with_validation(dict_event, validate_response)
+            print(f"[{get_timestamp()}] 🏷️ success: {dict_event.get('eventTitle', '')} model {MODEL_NAME_VERY_SMART.split('/')[-1]}")
+            return self._update_event_with_validation(dict_event, validate_response)
+        except Exception as e:
+            print(f"[{get_timestamp()}] 💥 Error in _make_very_smart_request: {str(e)}")
+            raise
 
     @staticmethod
     def _validate_response(response, initial_text: str) -> bool:
