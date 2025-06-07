@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import time
@@ -18,8 +19,9 @@ def get_timestamp():
 class PromptManager:
     def __init__(self):
         self.prompt = self._load_file(PROMPT_FILE)
-        self.few_shot = self._load_file(FEW_SHOT_FILE)
         self.json_scheme = self._load_file(JSON_SCHEME_FILE)
+        # Remove few_shot examples and scheme_hints to reduce token count
+        self.few_shot = self._load_file(FEW_SHOT_FILE)
         self.scheme_hints = self._load_file(SCHEME_HINTS_FILE)
 
     @staticmethod
@@ -47,7 +49,6 @@ class EventExtractor:
     @staticmethod
     def extract_event_data_from_raw_text(raw_text: str, initial_text: Optional[str] = None) -> Dict[str, Any]:
         """Extracts event data from raw text response"""
-        print(f"[{get_timestamp()}] 🔍 Starting event data extraction")
 
         pattern = r"```json\s*(\{.*?\})\s*```"
         matches = list(re.finditer(pattern, raw_text, re.DOTALL))
@@ -66,7 +67,6 @@ class EventExtractor:
                 
             event_dates = event.get("eventDate", [])
             if not event_dates:
-                print(f"[{get_timestamp()}] 🏷️ event: {event}")
                 return {
                     "errorCode": ERROR_CODES['DATE_NOT_FOUND'] + '_3',
                     "errorDetails": event,
@@ -88,7 +88,6 @@ class EventExtractor:
 
 class ModelAPI: 
     def __init__(self):
-        print(f"[{get_timestamp()}] 🧠 Initializing ModelAPI")
         self.prompt_manager = PromptManager()
         self.event_extractor = EventExtractor()
         self.model = LocalModel()
@@ -147,7 +146,6 @@ class ModelAPI:
     async def call_model_api(self, text: str) -> Dict[str, Any]:
         """Calls the model API and processes the response"""
         start_time = time.time()
-        print(f"[{get_timestamp()}] 🤖 Starting AI model call")
         
         try:
             response = await self._make_api_request(text)
@@ -158,7 +156,6 @@ class ModelAPI:
             # Save stats after each request
             self.save_stats_to_json()
             
-            print(f"[{get_timestamp()}] ✅ AI model call completed in {processing_time:.2f} seconds")
             return {
                 "result": response,
                 "processing_time": processing_time
@@ -202,7 +199,7 @@ class ModelAPI:
     def _process_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """Processes model response and extracts event data"""
         return self.event_extractor.extract_event_data_from_raw_text(
-            response["choices"][0]["message"]["content"]
+            response
         )
 
     def _update_event_with_validation(self, dict_event: Dict[str, Any], validate_response: Dict[str, Any]) -> Dict[str, Any]:
@@ -214,15 +211,15 @@ class ModelAPI:
 
     async def _make_regular_request(self, text: str) -> Dict[str, Any]:
         """Makes request using regular model"""
-        print(f"[{get_timestamp()}] 📡 Making request to regular model")
-        
+        os.makedirs('data', exist_ok=True)
+        open('data/regular_request.txt', 'w', encoding='utf-8').write( self._get_request_data(text))
         try:
             response = self.model.generate_response(
                 self._get_request_data(text),
                 MODEL_NAME
             )
-            print(f"[{get_timestamp()}] 📡 response: {response}")
             dict_event = self._process_response(response)
+            print(f"[{get_timestamp()}] 📡 dict_event: {dict_event}")
             validate_response = self._validate_response(dict_event, text)
 
             if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
@@ -265,7 +262,6 @@ class ModelAPI:
     def _validate_response(response, initial_text: str) -> bool:
         """Validates the response structure"""
         try:
-            print(f"[{get_timestamp()}] 🔍 Starting response validation")
             themes = response.get("eventThemes", [])
             categories = response.get("eventCategories", [])
             

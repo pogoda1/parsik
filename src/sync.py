@@ -56,7 +56,6 @@ async def parseEventsFromLocalList():
 
 async def parseEvent(event):
     try:
-        print(f"[{get_timestamp()}] 🧠 Initializing AI model for event {event['id']}")
         model_api = ModelAPI()
         response = await model_api.call_model_api(event['input'])
         result = json.dumps(response.get('result', {}), ensure_ascii=False, indent=2)
@@ -64,32 +63,31 @@ async def parseEvent(event):
             "id": event['id'],
             "result": json.loads(result)
         }
-        print(f"[{get_timestamp()}] 📤 Sending processed event {event['id']} to server")
-        request = requests.post(
-            'https://test-back.momenta.place/backend/integration/parsing/fillParsingEventResult',
-            headers={
-                'Authorization': f'Bearer {ACCESS_TOKEN}',
-                'Content-Type': 'application/json'
-            },
-            json=payload
-        )
-        fillModelLocalList({**payload, "responseFromServer": request.json(), "initial_event": event['input'], "processed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
-        deleteFromLocalList(event['id'])
+        # request = requests.post(
+        #     'https://test-back.momenta.place/backend/integration/parsing/fillParsingEventResult',
+        #     headers={
+        #         'Authorization': f'Bearer {ACCESS_TOKEN}',
+        #         'Content-Type': 'application/json'
+        #     },
+        #     json=payload
+        # )
+        # fillModelLocalList({**payload, "responseFromServer": request.json(), "initial_event": event['input'], "processed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+        # deleteFromLocalList(event['id'])
         
-        result_dict = response.get('result', {})
-        if isinstance(result_dict, dict) and result_dict.get('errorCode', 0) == 1:
-            print(f"[{get_timestamp()}] 🚫 Обработал элемент - {event['id']} {result_dict.get('errorText', '')}")
-        else:
-            print(f"[{get_timestamp()}] ✅ Обработал элемент - {event['id']}")
+        # result_dict = response.get('result', {})
+        # if isinstance(result_dict, dict) and result_dict.get('errorCode', 0) == 1:
+        #     print(f"[{get_timestamp()}] 🚫 Обработал элемент - {event['id']} {result_dict.get('errorText', '')}")
+        # else:
+        #     print(f"[{get_timestamp()}] ✅ Обработал элемент - {event['id']}")
             
-        # Report statistics at key points
-        stats = model_api.get_stats()
-        total_events = stats['total_events']
+        # # Report statistics at key points
+        # stats = model_api.get_stats()
+        # total_events = stats['total_events']
         
-        if total_events in [10, 50, 100]:
-            print(f"\n📊 Статистика обработки {total_events} событий:")
-            print(f"⏱️ Среднее время обработки: {stats['avg_processing_time']:.2f} сек")
-            print(f"🧠 Использование мощной нейронки: {stats['very_smart_usage_percent']:.1f}%\n")
+        # if total_events in [10, 50, 100]:
+        #     print(f"\n📊 Статистика обработки {total_events} событий:")
+        #     print(f"⏱️ Среднее время обработки: {stats['avg_processing_time']:.2f} сек")
+        #     print(f"🧠 Использование мощной нейронки: {stats['very_smart_usage_percent']:.1f}%\n")
             
     except Exception as e:
         print(f"[{get_timestamp()}] 💥 Error processing event {event['id']}: {e}")

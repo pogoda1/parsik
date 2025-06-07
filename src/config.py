@@ -1,3 +1,4 @@
+import os
 # Model Configuration
 MODEL_NAME = "C:/Users/home/.lmstudio/models/lmstudio-community/Qwen2.5-7B-Instruct-1M-GGUF/Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf"
 MODEL_NAME_VERY_SMART = "C:/Users/home/.lmstudio/models/mistralai/Devstral-Small-2505_gguf/devstralQ4_0.gguf"
