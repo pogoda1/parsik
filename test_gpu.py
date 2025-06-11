@@ -6,6 +6,7 @@ import psutil
 import GPUtil
 import time
 from src.api import PromptManager
+from src.config import MODEL_NAME, MODEL_NAME_VERY_SMART
 def check_system_info():
     info = []
     info.append(f"CPU использование: {psutil.cpu_percent()}%")
@@ -38,7 +39,7 @@ print(check_system_info())
 print("\nИнициализация модели...")
 model = Llama(
     
-    model_path="C:/Users/home/.lmstudio/models/mistralai/Devstral-Small-2505_gguf/devstralQ4_0.gguf",
+    model_path="C:/Users/home/.lmstudio/models/lmstudio-community/Qwen2.5-7B-Instruct-1M-GGUF/Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf",
     n_ctx=8192,
     n_gpu_layers=35,
     n_threads=os.cpu_count(),

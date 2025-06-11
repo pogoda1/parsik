@@ -11,6 +11,7 @@ from src.config import (
 )
 from src.utils import EventValidator
 from src.local_model import LocalModel
+from src.prompt_manager import PromptManager
 from datetime import datetime
 
 def get_timestamp():
@@ -45,51 +46,9 @@ class PromptManager:
         }
         return self.replace_variables(self.prompt, variables)
 
-class EventExtractor:
-    @staticmethod
-    def extract_event_data_from_raw_text(raw_text: str, initial_text: Optional[str] = None) -> Dict[str, Any]:
-        """Extracts event data from raw text response"""
-
-        pattern = r"```json\s*(\{.*?\})\s*```"
-        matches = list(re.finditer(pattern, raw_text, re.DOTALL))
-        
-        if not matches:
-            return json.loads(raw_text).get("data", {})
-        json_str = matches[-1].group(1)
-
-        try:
-            data = json.loads(json_str)
-            event = data.get("data", {})
-            textError = data.get("errorText", "")
-            
-            if textError == 'ADS':
-                return data
-                
-            event_dates = event.get("eventDate", [])
-            if not event_dates:
-                return {
-                    "errorCode": ERROR_CODES['DATE_NOT_FOUND'] + '_3',
-                    "errorDetails": event,
-                    "errorText": "DATE_NOT_FOUND"
-                }
-            
-            date_from_first_day = event_dates[0].get("from")
-            
-            if not date_from_first_day or not isinstance(date_from_first_day, str):
-                return {
-                    "errorCode": ERROR_CODES['INVALID_DATE'] + '_4',
-                    "errorDetails": json.dumps(event, ensure_ascii=False, indent=2),
-                    "errorText": "DATE_NOT_FOUND"
-                }
-            
-            return event
-        except Exception as e:
-            raise ValueError(f"Error extracting event data: {str(e)}")
-
 class ModelAPI: 
     def __init__(self):
         self.prompt_manager = PromptManager()
-        self.event_extractor = EventExtractor()
         self.model = LocalModel()
         self.stats = {
             'total_events': 0,
@@ -196,11 +155,6 @@ class ModelAPI:
             "Access-Control-Allow-Headers": "Content-Type"
         }
 
-    def _process_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Processes model response and extracts event data"""
-        return self.event_extractor.extract_event_data_from_raw_text(
-            response
-        )
 
     def _update_event_with_validation(self, dict_event: Dict[str, Any], validate_response: Dict[str, Any]) -> Dict[str, Any]:
         """Updates event data with validation results"""
@@ -212,17 +166,46 @@ class ModelAPI:
     async def _make_regular_request(self, text: str) -> Dict[str, Any]:
         """Makes request using regular model"""
         os.makedirs('data', exist_ok=True)
-        open('data/regular_request.txt', 'w', encoding='utf-8').write( self._get_request_data(text))
+        open('data/regular_request.txt', 'w', encoding='utf-8').write(self._get_request_data(text))
         try:
-            response = self.model.generate_response(
+            response = self.model.generate_structured_response(
                 self._get_request_data(text),
                 MODEL_NAME
             )
-            dict_event = self._process_response(response)
-            print(f"[{get_timestamp()}] 📡 dict_event: {dict_event}")
+            dict_event = response.get('data', {})
+  
             validate_response = self._validate_response(dict_event, text)
-
+            if validate_response.get("type") == "error" or validate_response.get("type") == "error_date_in_past":
+                print(dict_event)
+                return {
+                    'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
+                    'errorDetails': dict_event,
+                    'errorText': 'NOT_PARSED'
+                }
             if validate_response.get("type") != "success" and 'errorCode' not in dict_event:
+                error_data = {
+                    "timestamp": datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+                    "text": text,
+                    "dict_event": dict_event,
+                    "validate_response": validate_response
+                }
+                
+                # Читаем существующие ошибки или создаем новый список
+                try:
+                    with open('data/regular_request_error.json', 'r', encoding='utf-8') as f:
+                        errors = json.load(f)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    errors = []
+                
+                if not isinstance(errors, list):
+                    errors = []
+                    
+                # Добавляем новую ошибку
+                errors.append(error_data)
+                
+                # Сохраняем обновленный список ошибок
+                with open('data/regular_request_error.json', 'w', encoding='utf-8') as f:
+                    json.dump(errors, ensure_ascii=False, indent=2, fp=f)
                 print(f"[{get_timestamp()}] ♻️ Модель {MODEL_NAME} не смогла распарсить событие, пытаюсь еще раз с умной моделью {MODEL_NAME_VERY_SMART}")
                 return await self._make_very_smart_request(text)
 
@@ -238,14 +221,14 @@ class ModelAPI:
         self.stats['very_smart_usage'] += 1
 
         try:
-            response = self.model.generate_response(
+            response = self.model.generate_structured_response(
                 self._get_request_data(text),
                 MODEL_NAME_VERY_SMART
             )
-            dict_event = self._process_response(response)
+            dict_event = response.get('data', {})
             validate_response = self._validate_response(dict_event, text)
 
-            if validate_response.get("type") == "error":
+            if validate_response.get("type") == "error" or validate_response.get("type") == "error_date_in_past":
                 return {
                     'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
                     'errorDetails': dict_event,
@@ -260,7 +243,6 @@ class ModelAPI:
 
     @staticmethod
     def _validate_response(response, initial_text: str) -> bool:
-        """Validates the response structure"""
         try:
             themes = response.get("eventThemes", [])
             categories = response.get("eventCategories", [])
@@ -286,14 +268,34 @@ class ModelAPI:
                 return {
                     "type": "error",
                     "eventCategories": categories,
-                    "eventThemes": themes
+                    "eventThemes": themes,
+                    "errorDetails": f"Invalid categories: {invalid_categories} Invalid themes: {invalid_themes}, after valid categories: {categories} and themes: {themes}"
                 }
             
-            if not response.get("eventAgeLimit") or response.get("eventAgeLimit") not in EVENT_AGE_LIMITS:
+            dateFrom = response.get("eventDate", [])[0].get("from")
+
+            # Check if date is in the past
+            try:
+                # Parse ISO format date and convert to datetime
+                date_from = datetime.fromisoformat(dateFrom.replace('Z', '+00:00'))
+                current_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                if date_from.replace(hour=0, minute=0, second=0, microsecond=0) < current_date:
+                    return {
+                        "type": "error_date_in_past",
+                        "eventCategories": categories,
+                        "eventThemes": themes,
+                        "errorCode": ERROR_CODES.get('DATE_IN_PAST', 'DATE_IN_PAST'),
+                        "errorDetails": f"Event date {dateFrom} is in the past. Current date: {current_date.strftime('%Y-%m-%d')}"
+                    }
+            except ValueError:
                 return {
-                    "type": "success",
-                    "eventAgeLimit": '12',
+                    "type": "error",
+                    "eventCategories": categories,
+                    "eventThemes": themes,
+                    "errorCode": ERROR_CODES.get('INVALID_DATE_FORMAT', 'INVALID_DATE_FORMAT'),
+                    "errorDetails": f"Invalid date format: {dateFrom}. Expected ISO format (e.g. 2023-01-01T00:00:00.000Z)"
                 }
+
             if response.get("eventTitle") == "":
                 return {
                     "type": "error",
@@ -311,12 +313,7 @@ class ModelAPI:
                     "type": "success",
                     "linkSource": linkSource if 'https://' in linkSource else ''
                 }
-            
-            return {
-                "type": "success",
-                "eventCategories": categories,
-                "eventThemes": themes
-            }
+        
         except Exception as e:
             print(f"[{get_timestamp()}] 💥 validate_response error {e}")
             return {

@@ -2,10 +2,11 @@ import os
 # Model Configuration
 MODEL_NAME = "C:/Users/home/.lmstudio/models/lmstudio-community/Qwen2.5-7B-Instruct-1M-GGUF/Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf"
 MODEL_NAME_VERY_SMART = "C:/Users/home/.lmstudio/models/mistralai/Devstral-Small-2505_gguf/devstralQ4_0.gguf"
+
 TIMEOUT = 800
 
 # API Configuration
-ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOnsiaWQiOiI5MjZjYTBhNC1lODdmLTRhODQtYmNkYS04YWU0NzZkMmEwNDAiLCJ1c2VyTmFtZSI6Ik5pa2l0YSIsInVzZXJQaG9uZSI6IiIsInVzZXJFbWFpbCI6Im5pa2l0YS51c2hha292LjAyQGdtYWlsLmNvbSIsInVzZXJSb2xlIjoiYWRtaW4ifSwiaWF0IjoxNzQ4NzI4NDYwLCJleHAiOjE3NTEzMjA0NjB9.8L12Gv6HZUv4AT1_B6_ucpzSetCag6ya0i-0el8C424"
+ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOnsiaWQiOiI5MjZjYTBhNC1lODdmLTRhODQtYmNkYS04YWU0NzZkMmEwNDAiLCJ1c2VyTmFtZSI6Ik5pa2l0YSIsInVzZXJQaG9uZSI6IiIsInVzZXJFbWFpbCI6Im5pa2l0YS51c2hha292LjAyQGdtYWlsLmNvbSIsInVzZXJSb2xlIjoiYWRtaW4ifSwiaWF0IjoxNzQ5NDU5MjU4LCJleHAiOjE3NTIwNTEyNTh9.RJ_L9uptHi0ydwdxkhGjmIwe5HEL88sJJ5idX67tWDo"
 
 # File Paths
 PROMPT_FILE = os.path.expanduser("prompt.md")
@@ -19,8 +20,8 @@ EVENT_AGE_LIMITS = ('0', '6', '12', '16', '18')
 
 # Error Codes
 ERROR_CODES = {
-    'DATE_NOT_FOUND': '1',
-    'JSON_NOT_FOUND': '2',
+    'DATE_NOT_FOUND': '2',
+    'JSON_NOT_FOUND': '22',
     'INVALID_DATE': '3',
     'NOT_PARSED': '4'
 } 

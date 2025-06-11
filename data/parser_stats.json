@@ -1,7 +1,7 @@
 {
-  "total_events": 1,
+  "total_events": 9,
   "current_stats": {
-    "avg_processing_time": 13.362756967544556,
+    "avg_processing_time": 13.40778398513794,
     "smart_usage_percent": 0.0
   },
   "milestones": {
