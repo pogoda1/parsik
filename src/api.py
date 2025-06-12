@@ -323,7 +323,21 @@ class ModelAPI:
                     "errorDetails": f"Invalid categories: {invalid_categories} Invalid themes: {invalid_themes}, after valid categories: {categories} and themes: {themes}"
                 }
             
-            dateFrom = response.get("eventDate", [])[-1].get("to")
+            event_dates = response.get("eventDate", [])
+            if not event_dates:
+                return {
+                    "type": "error",
+                    "errorCode": ERROR_CODES.get('DATE_NOT_FOUND', 'DATE_NOT_FOUND'),
+                    "errorDetails": "No event dates found"
+                }
+            
+            dateFrom = event_dates[-1].get("to")
+            if not dateFrom:
+                return {
+                    "type": "error",
+                    "errorCode": ERROR_CODES.get('INVALID_DATE_FORMAT', 'INVALID_DATE_FORMAT'),
+                    "errorDetails": "Invalid date format: date 'to' field is missing"
+                }
 
             # Check if date is in the past
             try:
@@ -374,8 +388,7 @@ class ModelAPI:
                 }
 
 
-    @staticmethod
-    def _create_error_response(error_msg: str, start_time: float) -> Dict[str, Any]:
+    def _create_error_response(self, error_msg: str, start_time: float) -> Dict[str, Any]:
         """Creates an error response with processing time"""
         error_code = 'TIMEOUT' if '⏰' in error_msg else 'CONNECTION_ERROR' if '🔌' in error_msg else 'OTHER'
         self._track_error(error_code, error_msg)
