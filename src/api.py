@@ -54,6 +54,18 @@ class ModelAPI:
             'total_events': 0,
             'processing_times': [],
             'very_smart_usage': 0,
+            'errors': {
+                'total_errors': 0,
+                'by_type': {
+                    'NOT_PARSED': 0,
+                    'DATE_IN_PAST': 0,
+                    'INVALID_DATE_FORMAT': 0,
+                    'TIMEOUT': 0,
+                    'CONNECTION_ERROR': 0,
+                    'OTHER': 0
+                },
+                'last_errors': []  # Store last 10 errors with details
+            },
             'milestones': {
                 '10': {'avg_time': 0, 'smart_usage': 0},
                 '50': {'avg_time': 0, 'smart_usage': 0},
@@ -67,7 +79,10 @@ class ModelAPI:
             'total_events': self.stats['total_events'],
             'current_stats': {
                 'avg_processing_time': sum(self.stats['processing_times']) / len(self.stats['processing_times']) if self.stats['processing_times'] else 0,
-                'smart_usage_percent': (self.stats['very_smart_usage'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0
+                'smart_usage_percent': (self.stats['very_smart_usage'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0,
+                'error_rate': (self.stats['errors']['total_errors'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0,
+                'errors_by_type': self.stats['errors']['by_type'],
+                'last_errors': self.stats['errors']['last_errors']
             },
             'milestones': self.stats['milestones']
         }
@@ -81,26 +96,57 @@ class ModelAPI:
             return {
                 'total_events': 0,
                 'avg_processing_time': 0,
-                'very_smart_usage_percent': 0
+                'very_smart_usage_percent': 0,
+                'error_rate': 0,
+                'errors_by_type': self.stats['errors']['by_type'],
+                'last_errors': []
             }
             
         avg_time = sum(self.stats['processing_times']) / len(self.stats['processing_times'])
         smart_usage_percent = (self.stats['very_smart_usage'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0
+        error_rate = (self.stats['errors']['total_errors'] / self.stats['total_events']) * 100 if self.stats['total_events'] > 0 else 0
         
         # Update milestones if we hit one
         total_events = self.stats['total_events']
         if str(total_events) in self.stats['milestones']:
             self.stats['milestones'][str(total_events)] = {
                 'avg_time': avg_time,
-                'smart_usage': smart_usage_percent
+                'smart_usage': smart_usage_percent,
+                'error_rate': error_rate
             }
             self.save_stats_to_json()
             
         return {
             'total_events': total_events,
             'avg_processing_time': avg_time,
-            'very_smart_usage_percent': smart_usage_percent
+            'very_smart_usage_percent': smart_usage_percent,
+            'error_rate': error_rate,
+            'errors_by_type': self.stats['errors']['by_type'],
+            'last_errors': self.stats['errors']['last_errors']
         }
+
+    def _track_error(self, error_code: str, error_details: str):
+        """Tracks error statistics"""
+        self.stats['errors']['total_errors'] += 1
+        
+        # Update error type count
+        if error_code in self.stats['errors']['by_type']:
+            self.stats['errors']['by_type'][error_code] += 1
+        else:
+            self.stats['errors']['by_type']['OTHER'] += 1
+            
+        # Add to last errors
+        error_entry = {
+            'timestamp': get_timestamp(),
+            'error_code': error_code,
+            'details': error_details
+        }
+        self.stats['errors']['last_errors'].insert(0, error_entry)
+        # Keep only last 10 errors
+        self.stats['errors']['last_errors'] = self.stats['errors']['last_errors'][:10]
+        
+        # Save stats after each error
+        self.save_stats_to_json()
 
     async def call_model_api(self, text: str) -> Dict[str, Any]:
         """Calls the model API and processes the response"""
@@ -176,7 +222,10 @@ class ModelAPI:
   
             validate_response = self._validate_response(dict_event, text)
             if validate_response.get("type") == "error" or validate_response.get("type") == "error_date_in_past":
+                print(validate_response)
                 print(dict_event)
+                print(text)
+                self._track_error('NOT_PARSED', str(validate_response.get("errorDetails", "No details")))
                 return {
                     'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
                     'errorDetails': dict_event,
@@ -229,8 +278,10 @@ class ModelAPI:
             validate_response = self._validate_response(dict_event, text)
 
             if validate_response.get("type") == "error" or validate_response.get("type") == "error_date_in_past":
+                error_code = validate_response.get("errorCode", "NOT_PARSED")
+                self._track_error(error_code, str(validate_response.get("errorDetails", "No details")))
                 return {
-                    'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',
+                    'errorCode': ERROR_CODES['NOT_PARSED'] + '_2',
                     'errorDetails': dict_event,
                     'errorText': 'NOT_PARSED'
                 }
@@ -272,14 +323,14 @@ class ModelAPI:
                     "errorDetails": f"Invalid categories: {invalid_categories} Invalid themes: {invalid_themes}, after valid categories: {categories} and themes: {themes}"
                 }
             
-            dateFrom = response.get("eventDate", [])[0].get("from")
+            dateFrom = response.get("eventDate", [])[-1].get("to")
 
             # Check if date is in the past
             try:
                 # Parse ISO format date and convert to datetime
-                date_from = datetime.fromisoformat(dateFrom.replace('Z', '+00:00'))
+                date_to = datetime.fromisoformat(dateFrom.replace('Z', '+00:00'))
                 current_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-                if date_from.replace(hour=0, minute=0, second=0, microsecond=0) < current_date:
+                if date_to.replace(hour=0, minute=0, second=0, microsecond=0) < current_date:
                     return {
                         "type": "error_date_in_past",
                         "eventCategories": categories,
@@ -326,6 +377,8 @@ class ModelAPI:
     @staticmethod
     def _create_error_response(error_msg: str, start_time: float) -> Dict[str, Any]:
         """Creates an error response with processing time"""
+        error_code = 'TIMEOUT' if '⏰' in error_msg else 'CONNECTION_ERROR' if '🔌' in error_msg else 'OTHER'
+        self._track_error(error_code, error_msg)
         return {
             "error": error_msg,
             "processing_time": time.time() - start_time
