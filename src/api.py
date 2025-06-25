@@ -205,7 +205,7 @@ class ModelAPI:
     def _update_event_with_validation(self, dict_event: Dict[str, Any], validate_response: Dict[str, Any]) -> Dict[str, Any]:
         """Updates event data with validation results"""
         for key in validate_response.keys():
-            if key not in dict_event and key != "type":
+            if key != "type":
                 dict_event[key] = validate_response.get(key, "")
         return dict_event
 
@@ -222,9 +222,7 @@ class ModelAPI:
   
             validate_response = self._validate_response(dict_event, text)
             if validate_response.get("type") == "error" or validate_response.get("type") == "error_date_in_past":
-                print(validate_response)
-                print(dict_event)
-                print(text)
+    
                 self._track_error('NOT_PARSED', str(validate_response.get("errorDetails", "No details")))
                 return {
                     'errorCode': ERROR_CODES['NOT_PARSED'] + '_1',

@@ -1,85 +1,31 @@
 {
-  "total_events": 337,
+  "total_events": 1,
   "current_stats": {
-    "avg_processing_time": 12.00675621938281,
+    "avg_processing_time": 15.189586639404297,
     "smart_usage_percent": 0.0,
-    "error_rate": 3.857566765578635,
+    "error_rate": 0.0,
     "errors_by_type": {
-      "NOT_PARSED": 13,
+      "NOT_PARSED": 0,
       "DATE_IN_PAST": 0,
       "INVALID_DATE_FORMAT": 0,
       "TIMEOUT": 0,
       "CONNECTION_ERROR": 0,
       "OTHER": 0
     },
-    "last_errors": [
-      {
-        "timestamp": "2025-06-12 19:46:26",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-01-01T21:00:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:43:01",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-06-11T18:30:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:41:51",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-06-11T21:30:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:41:40",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-05-31T00:00:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:40:49",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-06-07T15:00:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:40:38",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-06-10T20:30:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:40:26",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-05-27T19:30:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:38:37",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-06-11T21:00:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:37:17",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-03-14T19:00:00 is in the past. Current date: 2025-06-12"
-      },
-      {
-        "timestamp": "2025-06-12 19:37:05",
-        "error_code": "NOT_PARSED",
-        "details": "Event date 2025-03-01T19:00:00 is in the past. Current date: 2025-06-12"
-      }
-    ]
+    "last_errors": []
   },
   "milestones": {
     "10": {
-      "avg_time": 13.040629124641418,
-      "smart_usage": 0.0,
-      "error_rate": 0.0
+      "avg_time": 0,
+      "smart_usage": 0
     },
     "50": {
-      "avg_time": 12.388157267570495,
-      "smart_usage": 0.0,
-      "error_rate": 0.0
+      "avg_time": 0,
+      "smart_usage": 0
     },
     "100": {
-      "avg_time": 12.006734449863433,
-      "smart_usage": 0.0,
-      "error_rate": 0.0
+      "avg_time": 0,
+      "smart_usage": 0
     }
   }
 }
