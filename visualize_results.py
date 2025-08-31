@@ -4,15 +4,18 @@ import pandas as pd
 import seaborn as sns
 from datetime import datetime
 import numpy as np
+import base64
+from io import BytesIO
 
 # Настройка для отображения русских символов
-plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'SimHei']
-plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams["font.family"] = ["DejaVu Sans", "Arial Unicode MS", "SimHei"]
+plt.rcParams["axes.unicode_minus"] = False
+
 
 def load_view_test_data():
     """Загружает данные из viewTest.json"""
     try:
-        with open('data/viewTest.json', 'r', encoding='utf-8') as f:
+        with open("data/viewTest.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         print("❌ Файл data/viewTest.json не найден")
@@ -21,220 +24,326 @@ def load_view_test_data():
         print(f"❌ Ошибка парсинга JSON: {e}")
         return None
 
-def prepare_data_for_analysis(data):
-    """Подготавливает данные для анализа"""
-    results = []
-    
-    for model_name, model_data in data['models'].items():
-        for result in model_data['results']:
-            row = {
-                'model_name': model_name,
-                'event_id': result['event_id'],
-                'has_error': 'error' in result,
-                'processing_time': result.get('processing_time_seconds'),
-                'tested_at': model_data['tested_at']
-            }
-            
-            # Анализируем успешные результаты
-            if 'output_json' in result:
-                output = result['output_json'].get('data', {})
-                row.update({
-                    'event_title': output.get('eventTitle', ''),
-                    'event_categories': output.get('eventCategories', []),
-                    'event_themes': output.get('eventThemes', []),
-                    'event_price': output.get('eventPrice', [0])[0] if output.get('eventPrice') else 0,
-                    'event_age_limit': output.get('eventAgeLimit', ''),
-                    'has_location': bool(output.get('eventLocation', {}).get('name')),
-                    'has_link': bool(output.get('linkSource')),
-                    'date_parsed': bool(output.get('eventDate'))
-                })
-            else:
-                row.update({
-                    'event_title': '',
-                    'event_categories': [],
-                    'event_themes': [],
-                    'event_price': 0,
-                    'event_age_limit': '',
-                    'has_location': False,
-                    'has_link': False,
-                    'date_parsed': False
-                })
-            
-            results.append(row)
-    
-    return pd.DataFrame(results)
 
-def create_performance_comparison(df):
-    """Создает график сравнения производительности моделей"""
-    plt.figure(figsize=(12, 8))
+def create_time_chart(df):
+    """Создает график времени обработки и возвращает base64 строку"""
+    successful_data = df[df["has_error"] == False]
     
-    # Группируем по модели и вычисляем статистики
-    model_stats = df.groupby('model_name').agg({
-        'processing_time': ['mean', 'std', 'count'],
-        'has_error': 'sum'
-    }).round(2)
-    
-    model_stats.columns = ['avg_time', 'std_time', 'total_events', 'errors']
-    model_stats['success_rate'] = ((model_stats['total_events'] - model_stats['errors']) / model_stats['total_events'] * 100).round(1)
-    
-    # Создаем график
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
-    
-    # График времени обработки
-    colors = plt.cm.Set3(np.linspace(0, 1, len(model_stats)))
-    bars1 = ax1.bar(range(len(model_stats)), model_stats['avg_time'], 
-                    yerr=model_stats['std_time'], capsize=5, color=colors, alpha=0.7)
-    ax1.set_title('Среднее время обработки событий по моделям', fontsize=14, fontweight='bold')
-    ax1.set_ylabel('Время (секунды)')
-    ax1.set_xticks(range(len(model_stats)))
-    ax1.set_xticklabels(model_stats.index, rotation=45, ha='right')
-    
-    # Добавляем значения на столбцы
-    for i, bar in enumerate(bars1):
-        height = bar.get_height()
-        ax1.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                f'{height:.1f}s', ha='center', va='bottom', fontweight='bold')
-    
-    # График успешности
-    bars2 = ax2.bar(range(len(model_stats)), model_stats['success_rate'], 
-                    color=colors, alpha=0.7)
-    ax2.set_title('Процент успешных обработок по моделям', fontsize=14, fontweight='bold')
-    ax2.set_ylabel('Успешность (%)')
-    ax2.set_xticks(range(len(model_stats)))
-    ax2.set_xticklabels(model_stats.index, rotation=45, ha='right')
-    ax2.set_ylim(0, 100)
-    
-    # Добавляем значения на столбцы
-    for i, bar in enumerate(bars2):
-        height = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width()/2., height + 1,
-                f'{height:.1f}%', ha='center', va='bottom', fontweight='bold')
-    
-    plt.tight_layout()
-    plt.savefig('data/model_performance_comparison.png', dpi=300, bbox_inches='tight')
-    plt.show()
-    
-    return model_stats
-
-def create_error_analysis(df):
-    """Анализирует ошибки по моделям"""
-    error_data = df[df['has_error'] == True]
-    
-    if error_data.empty:
-        print("✅ Ошибок не найдено")
-        return
+    if successful_data.empty:
+        return None
     
     plt.figure(figsize=(12, 6))
     
-    # Подсчитываем ошибки по моделям
-    error_counts = error_data['model_name'].value_counts()
+    # Группируем по модели и вычисляем статистики
+    model_stats = successful_data.groupby("model_name").agg({
+        "processing_time": ["mean", "std", "count"]
+    }).round(2)
     
-    colors = plt.cm.Reds(np.linspace(0.3, 0.8, len(error_counts)))
-    bars = plt.bar(range(len(error_counts)), error_counts.values, color=colors, alpha=0.7)
+    model_stats.columns = ["avg_time", "std_time", "count"]
     
-    plt.title('Количество ошибок по моделям', fontsize=14, fontweight='bold')
-    plt.ylabel('Количество ошибок')
-    plt.xticks(range(len(error_counts)), error_counts.index, rotation=45, ha='right')
+    # Создаем bar chart
+    colors = plt.cm.Set3(np.linspace(0, 1, len(model_stats)))
+    bars = plt.bar(range(len(model_stats)), model_stats["avg_time"], 
+                   yerr=model_stats["std_time"], capsize=5, color=colors, alpha=0.7)
+    
+    plt.title("Среднее время обработки событий по моделям", fontsize=14, fontweight="bold")
+    plt.ylabel("Время (секунды)")
+    plt.xlabel("Модель")
+    plt.xticks(range(len(model_stats)), model_stats.index, rotation=45, ha="right")
     
     # Добавляем значения на столбцы
     for i, bar in enumerate(bars):
         height = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                str(int(height)), ha='center', va='bottom', fontweight='bold')
+                f'{height:.1f}s', ha='center', va='bottom', fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig('data/error_analysis.png', dpi=300, bbox_inches='tight')
-    plt.show()
+    
+    # Сохраняем график в base64
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode()
+    plt.close()
+    
+    return image_base64
 
-def create_quality_analysis(df):
-    """Анализирует качество парсинга"""
-    successful_data = df[df['has_error'] == False]
-    
-    if successful_data.empty:
-        print("❌ Нет успешных результатов для анализа качества")
-        return
-    
-    # Создаем метрики качества
-    quality_metrics = successful_data.groupby('model_name').agg({
-        'has_location': 'mean',
-        'has_link': 'mean',
-        'date_parsed': 'mean',
-        'event_categories': lambda x: x.apply(lambda cats: len(cats) > 0).mean(),
-        'event_themes': lambda x: x.apply(lambda themes: len(themes) > 0).mean()
-    }).round(3) * 100
-    
-    quality_metrics.columns = ['Локация', 'Ссылка', 'Дата', 'Категории', 'Темы']
-    
-    # Создаем тепловую карту
-    plt.figure(figsize=(12, 8))
-    sns.heatmap(quality_metrics.T, annot=True, fmt='.1f', cmap='RdYlGn', 
-                cbar_kws={'label': 'Процент успешного парсинга (%)'})
-    plt.title('Качество парсинга по моделям', fontsize=14, fontweight='bold')
-    plt.ylabel('Тип данных')
-    plt.xlabel('Модель')
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig('data/quality_analysis.png', dpi=300, bbox_inches='tight')
-    plt.show()
-    
-    return quality_metrics
 
-def create_time_distribution(df):
-    """Создает распределение времени обработки"""
-    successful_data = df[df['has_error'] == False]
+def create_html_report(data):
+    """Создает HTML отчет с результатами тестирования"""
     
-    if successful_data.empty:
-        print("❌ Нет успешных результатов для анализа времени")
-        return
+    # Подготавливаем данные для анализа
+    results = []
+    for model_name, model_data in data["models"].items():
+        for result in model_data["results"]:
+            row = {
+                "model_name": model_name,
+                "event_id": result["event_id"],
+                "input_text": result["input_text"],
+                "has_error": "error" in result,
+                "processing_time": result.get("processing_time_seconds"),
+                "tested_at": model_data["tested_at"]
+            }
+            
+            if "output_json" in result:
+                output = result["output_json"].get("data", {})
+                row["output_text"] = json.dumps(output, ensure_ascii=False, indent=2)
+                row["error"] = None
+            else:
+                row["output_text"] = ""
+                row["error"] = result.get("error", "Неизвестная ошибка")
+            
+            results.append(row)
     
-    plt.figure(figsize=(12, 6))
+    df = pd.DataFrame(results)
     
-    # Создаем box plot
-    models = successful_data['model_name'].unique()
-    data_to_plot = [successful_data[successful_data['model_name'] == model]['processing_time'].dropna() 
-                   for model in models]
+    # Создаем график времени
+    time_chart_base64 = create_time_chart(df)
     
-    plt.boxplot(data_to_plot, labels=models)
-    plt.title('Распределение времени обработки по моделям', fontsize=14, fontweight='bold')
-    plt.ylabel('Время (секунды)')
-    plt.xticks(rotation=45, ha='right')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig('data/time_distribution.png', dpi=300, bbox_inches='tight')
-    plt.show()
+    # Создаем HTML таблицу
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Результаты тестирования моделей</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }}
+            .container {{
+                max-width: 1400px;
+                margin: 0 auto;
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }}
+            .header {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                text-align: center;
+            }}
+            .header h1 {{
+                margin: 0;
+                font-size: 2.5em;
+                font-weight: 300;
+            }}
+            .header p {{
+                margin: 10px 0 0 0;
+                opacity: 0.9;
+                font-size: 1.1em;
+            }}
+            .stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                padding: 30px;
+                background-color: #f8f9fa;
+            }}
+            .stat-card {{
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                text-align: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }}
+            .stat-number {{
+                font-size: 2em;
+                font-weight: bold;
+                color: #667eea;
+            }}
+            .stat-label {{
+                color: #666;
+                margin-top: 5px;
+            }}
+            .chart-section {{
+                padding: 30px;
+                text-align: center;
+            }}
+            .chart-section h2 {{
+                color: #333;
+                margin-bottom: 20px;
+            }}
+            .chart-section img {{
+                max-width: 100%;
+                height: auto;
+                border-radius: 8px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }}
+            .table-section {{
+                padding: 30px;
+            }}
+            .table-section h2 {{
+                color: #333;
+                margin-bottom: 20px;
+            }}
+            .results-table {{
+                width: 100%;
+                border-collapse: collapse;
+                background: white;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }}
+            .results-table th {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 15px;
+                text-align: left;
+                font-weight: 500;
+            }}
+            .results-table td {{
+                padding: 15px;
+                border-bottom: 1px solid #eee;
+                vertical-align: top;
+            }}
+            .results-table tr:hover {{
+                background-color: #f8f9fa;
+            }}
+            .model-name {{
+                font-weight: bold;
+                color: #667eea;
+            }}
+            .event-id {{
+                font-weight: bold;
+                color: #333;
+            }}
+            .input-text {{
+                max-width: 300px;
+                word-wrap: break-word;
+                font-size: 0.9em;
+                line-height: 1.4;
+            }}
+            .output-text {{
+                max-width: 400px;
+                word-wrap: break-word;
+                font-size: 0.8em;
+                line-height: 1.3;
+                background-color: #f8f9fa;
+                padding: 10px;
+                border-radius: 4px;
+                border-left: 4px solid #28a745;
+            }}
+            .error-text {{
+                color: #dc3545;
+                font-weight: bold;
+                background-color: #f8d7da;
+                padding: 10px;
+                border-radius: 4px;
+                border-left: 4px solid #dc3545;
+            }}
+            .processing-time {{
+                font-weight: bold;
+                color: #28a745;
+            }}
+            .success {{
+                color: #28a745;
+                font-weight: bold;
+            }}
+            .error {{
+                color: #dc3545;
+                font-weight: bold;
+            }}
+            .timestamp {{
+                font-size: 0.8em;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>📊 Результаты тестирования моделей</h1>
+                <p>Анализ производительности и качества парсинга событий</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">""" + str(len(data['models'])) + """</div>
+                    <div class="stat-label">Моделей протестировано</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">""" + str(len(results)) + """</div>
+                    <div class="stat-label">Событий обработано</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">""" + str(len([r for r in results if not r['has_error']])) + """</div>
+                    <div class="stat-label">Успешных обработок</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">""" + str(len([r for r in results if r['has_error']])) + """</div>
+                    <div class="stat-label">Ошибок</div>
+                </div>
+            </div>
+            
+            <div class="chart-section">
+                <h2>⏱️ Время обработки по моделям</h2>
+                <img src="data:image/png;base64,""" + (time_chart_base64 or '') + """" alt="График времени обработки">
+            </div>
+            
+            <div class="table-section">
+                <h2>📋 Детальные результаты</h2>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Модель</th>
+                            <th>ID события</th>
+                            <th>Входной текст</th>
+                            <th>Результат</th>
+                            <th>Время (с)</th>
+                            <th>Статус</th>
+                            <th>Дата тестирования</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    """
+    
+    for result in results:
+        status_class = "success" if not result["has_error"] else "error"
+        status_text = "✅ Успех" if not result["has_error"] else "❌ Ошибка"
+        
+        html_content += """
+                        <tr>
+                            <td class="model-name">""" + result['model_name'] + """</td>
+                            <td class="event-id">""" + str(result['event_id']) + """</td>
+                            <td class="input-text">""" + result['input_text'][:200] + ('...' if len(result['input_text']) > 200 else '') + """</td>
+                            <td>
+        """
+        
+        if result["has_error"]:
+            html_content += '<div class="error-text">' + result["error"] + '</div>'
+        else:
+            html_content += '<div class="output-text">' + result["output_text"][:500] + ("..." if len(result["output_text"]) > 500 else "") + '</div>'
+        
+        html_content += """
+                            </td>
+                            <td class="processing-time">""" + (f"{result['processing_time']:.2f}" if result['processing_time'] else 'N/A') + """</td>
+                            <td class="""" + status_class + """">""" + status_text + """</td>
+                            <td class="timestamp">""" + result['tested_at'] + """</td>
+                        </tr>
+        """
+    
+    html_content += """
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html_content
 
-def print_summary_statistics(df, model_stats, quality_metrics):
-    """Выводит сводную статистику"""
-    print("\n" + "="*80)
-    print("📊 СВОДНАЯ СТАТИСТИКА ТЕСТИРОВАНИЯ МОДЕЛЕЙ")
-    print("="*80)
-    
-    print(f"\n📈 Общая статистика:")
-    print(f"   • Всего протестировано моделей: {len(df['model_name'].unique())}")
-    print(f"   • Всего обработано событий: {len(df)}")
-    print(f"   • Успешных обработок: {len(df[df['has_error'] == False])}")
-    print(f"   • Ошибок: {len(df[df['has_error'] == True])}")
-    print(f"   • Общий процент успеха: {(len(df[df['has_error'] == False]) / len(df) * 100):.1f}%")
-    
-    print(f"\n🏆 Лучшие модели по времени:")
-    fastest_models = model_stats.nsmallest(3, 'avg_time')
-    for i, (model, stats) in enumerate(fastest_models.iterrows(), 1):
-        print(f"   {i}. {model}: {stats['avg_time']:.2f}s ± {stats['std_time']:.2f}s")
-    
-    print(f"\n🎯 Лучшие модели по успешности:")
-    best_models = model_stats.nlargest(3, 'success_rate')
-    for i, (model, stats) in enumerate(best_models.iterrows(), 1):
-        print(f"   {i}. {model}: {stats['success_rate']:.1f}% ({stats['total_events'] - stats['errors']}/{stats['total_events']})")
-    
-    if quality_metrics is not None:
-        print(f"\n📋 Среднее качество парсинга:")
-        avg_quality = quality_metrics.mean()
-        for metric, value in avg_quality.items():
-            print(f"   • {metric}: {value:.1f}%")
 
 def main():
-    """Основная функция визуализации"""
-    print("🚀 Запуск визуализации результатов тестирования моделей...")
+    """Основная функция создания HTML отчета"""
+    print("🚀 Создание HTML отчета результатов тестирования...")
     
     # Загружаем данные
     data = load_view_test_data()
@@ -243,33 +352,20 @@ def main():
     
     print(f"✅ Загружены данные для {len(data['models'])} моделей")
     
-    # Подготавливаем данные
-    df = prepare_data_for_analysis(data)
-    print(f"📊 Подготовлено {len(df)} записей для анализа")
+    # Создаем HTML отчет
+    html_content = create_html_report(data)
     
-    # Создаем визуализации
-    print("\n📈 Создание графиков...")
+    # Сохраняем HTML файл
+    with open("data/test_results_report.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
     
-    # Сравнение производительности
-    model_stats = create_performance_comparison(df)
-    
-    # Анализ ошибок
-    create_error_analysis(df)
-    
-    # Анализ качества
-    quality_metrics = create_quality_analysis(df)
-    
-    # Распределение времени
-    create_time_distribution(df)
-    
-    # Выводим сводку
-    print_summary_statistics(df, model_stats, quality_metrics)
-    
-    print(f"\n✅ Визуализация завершена! Графики сохранены в папке data/")
-    print(f"   • model_performance_comparison.png")
-    print(f"   • error_analysis.png") 
-    print(f"   • quality_analysis.png")
-    print(f"   • time_distribution.png")
+    print("✅ HTML отчет создан: data/test_results_report.html")
+    print("📊 Отчет содержит:")
+    print("   • Статистику по моделям")
+    print("   • График времени обработки")
+    print("   • Детальную таблицу результатов")
+    print("   • Входные и выходные данные для каждого события")
+
 
 if __name__ == "__main__":
     main()
