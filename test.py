@@ -81,14 +81,21 @@ def test_model():
             # Подготавливаем промпт
             prompt = prompt_manager.prepare_prompt(event["initialText"])
 
+            # Засекаем время начала обработки
+            start_time = datetime.now()
+            
             # Получаем ответ от модели
             response = model.generate_structured_response(prompt, MODEL_NAME)
+            
+            # Вычисляем время обработки
+            processing_time = (datetime.now() - start_time).total_seconds()
 
             # Сохраняем результат
             result = {
                 "event_id": event["id"],
                 "input_text": event["initialText"],
                 "output_json": response,
+                "processing_time_seconds": processing_time,
                 "processed_at": get_timestamp(),
             }
 
@@ -106,6 +113,7 @@ def test_model():
                 "event_id": event["id"],
                 "input_text": event["initialText"],
                 "error": str(e),
+                "processing_time_seconds": None,
                 "processed_at": get_timestamp(),
             }
 
